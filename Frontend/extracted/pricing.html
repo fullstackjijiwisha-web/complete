@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing — POSH Compass</title>
+<meta name="description" content="Tiered per-employee pricing: ₹48 up to 30 employees, ₹36 for 31–100, ₹24 for 101–200, ₹12 for 201+. No hidden charges.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-page="pricing.html">
+
+<header id="topnav"></header>
+
+<section class="hero">
+  <div class="container" style="padding-top:60px;padding-bottom:52px;max-width:820px;text-align:center;margin:0 auto">
+    <span class="eyebrow on-dark">Pricing</span>
+    <h1 class="h-xl" style="color:#fff">Priced Per Employee.<br>Scales With Headcount.</h1>
+    <p class="lede" style="color:#d5e2da;margin:18px auto 0">One rate per employee covers the full cycle — assessment, certification, readiness tracking and audit booking support. No hidden charges, ever.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="price-grid">
+      <div class="price-card reveal">
+        <span class="band">Tier 1</span>
+        <div class="headcount">Up to 30 employees</div>
+        <div class="price">₹48</div>
+        <div class="per">per employee · full cycle</div>
+        <ul>
+          <li>All 4 assessment formats</li>
+          <li>Individual certification (80%+)</li>
+          <li>Organisation readiness tracking</li>
+          <li>Audit booking support</li>
+        </ul>
+        <button class="btn btn-green" data-register>Get Started</button>
+      </div>
+      <div class="price-card featured reveal">
+        <span class="flag">Most common</span>
+        <span class="band">Tier 2</span>
+        <div class="headcount">31 – 100 employees</div>
+        <div class="price">₹36</div>
+        <div class="per">per employee · full cycle</div>
+        <ul>
+          <li>All 4 assessment formats</li>
+          <li>Individual certification (80%+)</li>
+          <li>Organisation readiness tracking</li>
+          <li>Audit booking support</li>
+        </ul>
+        <button class="btn btn-green" data-register>Get Started</button>
+      </div>
+      <div class="price-card reveal">
+        <span class="band">Tier 3</span>
+        <div class="headcount">101 – 200 employees</div>
+        <div class="price">₹24</div>
+        <div class="per">per employee · full cycle</div>
+        <ul>
+          <li>All 4 assessment formats</li>
+          <li>Individual certification (80%+)</li>
+          <li>Organisation readiness tracking</li>
+          <li>Audit booking support</li>
+        </ul>
+        <button class="btn btn-green" data-register>Get Started</button>
+      </div>
+      <div class="price-card reveal">
+        <span class="band">Tier 4</span>
+        <div class="headcount">201+ employees</div>
+        <div class="price">₹12</div>
+        <div class="per">per employee · full cycle</div>
+        <ul>
+          <li>All 4 assessment formats</li>
+          <li>Individual certification (80%+)</li>
+          <li>Organisation readiness tracking</li>
+          <li>Audit booking support</li>
+        </ul>
+        <button class="btn btn-green" data-register>Get Started</button>
+      </div>
+    </div>
+
+    <div class="card mt-3 reveal">
+      <div class="card-grid cols-3">
+        <div class="flex"><span class="icon-tile" style="margin:0" data-icon="check" data-size="20" data-color="#16543a"></span>
+          <span class="small"><strong>Everything included</strong><br>Assessments, certificates, readiness tracking, audit booking support.</span></div>
+        <div class="flex"><span class="icon-tile" style="margin:0" data-icon="lock" data-size="20" data-color="#16543a"></span>
+          <span class="small"><strong>No hidden charges</strong><br>The per-employee rate is the entire price. Re-attempts after re-training are free.</span></div>
+        <div class="flex"><span class="icon-tile" style="margin:0" data-icon="trend" data-size="20" data-color="#16543a"></span>
+          <span class="small"><strong>Scalable logic</strong><br>Your whole headcount is billed at the single tier it lands in — growing never penalises you.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Calculator -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="calc reveal">
+      <div class="calc-grid">
+        <div>
+          <span class="eyebrow on-dark">Cost calculator</span>
+          <h2 class="h-lg" style="color:#fff">Know your exact cost<br>before you register.</h2>
+          <label for="calc-emp" class="mt-3" style="margin-top:22px">Number of employees</label>
+          <input type="number" id="calc-emp" min="1" max="5000" value="120">
+          <input type="range" id="calc-range" min="1" max="1000" value="120" aria-label="Employees slider">
+        </div>
+        <div class="calc-out" aria-live="polite">
+          <div class="row"><span>Tier applied</span><strong id="out-tier">101 – 200 employees</strong></div>
+          <div class="row"><span>Rate per employee</span><strong id="out-rate">₹24</strong></div>
+          <div class="row"><span>Employees</span><strong id="out-emp">120</strong></div>
+          <div class="row total"><span>Total (one full cycle)</span><strong id="out-total">₹10,680</strong></div>
+          <p class="small" style="color:#8fa79a;margin-top:10px" id="out-note">Includes assessments, certification, readiness tracking and audit booking support.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- What the price buys — proof framing -->
+<section class="section" style="background:var(--surface);border-top:1px solid var(--line);padding-top:56px">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">What the price buys</span>
+      <h2 class="h-lg">Every Rupee Maps to Proof</h2>
+    </div>
+    <div class="card-grid cols-4">
+      <div class="card reveal"><h3 class="h-sm">Assessments</h3><p class="small muted">4 formats per employee, timed and trace-logged.</p><div class="proof-note"><span class="tag">Proof</span> Response trace per employee</div></div>
+      <div class="card reveal"><h3 class="h-sm">Certification system</h3><p class="small muted">Automatic 80% threshold, digital certificates.</p><div class="proof-note"><span class="tag">Proof</span> Verifiable certificate ID</div></div>
+      <div class="card reveal"><h3 class="h-sm">Readiness tracking</h3><p class="small muted">Live 95% rule computation on the admin dashboard.</p><div class="proof-note"><span class="tag">Proof</span> Dated POSH Ready record</div></div>
+      <div class="card reveal"><h3 class="h-sm">Audit booking support</h3><p class="small muted">Scheduling, document checklist and evidence pack for Jijiwisha Society.</p><div class="proof-note"><span class="tag">Proof</span> Sealed audit evidence pack</div></div>
+    </div>
+    <div class="center mt-4 reveal">
+      <button class="btn btn-orange btn-lg" data-register>Register Organisation</button>
+    </div>
+  </div>
+</section>
+
+<footer id="footer"></footer>
+<script src="js/main.js"></script>
+<script src="js/api.js"></script>
+<script>
+(function () {
+  const emp = document.getElementById("calc-emp");
+  const range = document.getElementById("calc-range");
+
+  function tierLabel(n) {
+    for (let i = 0; i < PC.TIERS.length; i++) if (n <= PC.TIERS[i].max) return PC.TIERS[i].label;
+    return PC.TIERS[PC.TIERS.length - 1].label;
+  }
+  function update(n) {
+    n = Math.max(1, Math.min(100000, parseInt(n, 10) || 1));
+    const rate = PC.rateFor(n);
+    document.getElementById("out-tier").textContent = tierLabel(n);
+    document.getElementById("out-rate").textContent = PC.inr(rate);
+    document.getElementById("out-emp").textContent = n.toLocaleString("en-IN");
+    document.getElementById("out-total").textContent = PC.inr(rate * n);
+  }
+  emp.addEventListener("input", function () { range.value = Math.min(1000, emp.value || 1); update(emp.value); });
+  range.addEventListener("input", function () { emp.value = range.value; update(range.value); });
+  update(emp.value);
+})();
+</script>
+</body>
+</html>

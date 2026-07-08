@@ -1,0 +1,84 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { requireAuth } from '../../middleware/requireAuth';
+import { roleGuard } from '../../middleware/roleGuard';
+import { validate } from '../../middleware/validate';
+import * as controller from './admin.controller';
+
+export const adminRoutes = Router();
+
+adminRoutes.use(requireAuth, roleGuard('super_admin'));
+
+// Question bank (PRD F3) — versioned CRUD, four formats
+const optionSchema = z.object({ text: z.string().min(1), weight: z.number().min(0).max(1) });
+const questionSchema = z.object({
+  type: z.enum(['mcq', 'fib', 'case_study', 'simulation']),
+  tags: z.array(z.string().min(1)).default([]),
+  actReference: z.string().max(200).optional(),
+  difficulty: z.enum(['easy', 'medium', 'hard']).default('medium'),
+  body: z.string().min(10),
+  options: z.array(optionSchema).min(2).optional(),
+  blanks: z.array(z.object({ acceptedAnswers: z.array(z.string().min(1)).min(1) })).optional(),
+  nodes: z
+    .array(
+      z.object({
+        nodeId: z.string().min(1),
+        prompt: z.string().min(1),
+        choices: z
+          .array(
+            z.object({
+              choiceId: z.string().min(1),
+              text: z.string().min(1),
+              impact: z.number().min(0).max(1),
+              nextNodeId: z.string().optional(),
+            }),
+          )
+          .min(2),
+      }),
+    )
+    .optional(),
+  isActive: z.boolean().default(true),
+});
+
+adminRoutes.get('/questions', controller.listQuestions);
+adminRoutes.post('/questions', validate(questionSchema), controller.createQuestion);
+adminRoutes.patch('/questions/:id', validate(questionSchema.partial()), controller.updateQuestion);
+
+adminRoutes.get('/orgs', controller.listOrgs);
+adminRoutes.patch(
+  '/orgs/:id',
+  validate(z.object({ seatsActive: z.boolean().optional(), isDeleted: z.boolean().optional() })),
+  controller.patchOrg,
+);
+
+adminRoutes.get('/audit-log', controller.listAuditLog);
+adminRoutes.get('/config', controller.getConfig);
+
+adminRoutes.post(
+  '/audit-slots',
+  validate(z.object({ startsAt: z.coerce.date() })),
+  controller.createAuditSlot,
+);
+adminRoutes.patch(
+  '/audits/:id/assign',
+  validate(z.object({ auditorId: z.string().length(24) })),
+  controller.assignAuditor,
+);
+adminRoutes.post(
+  '/auditors',
+  validate(
+    z.object({
+      name: z.string().min(2).max(120),
+      email: z.string().email().max(254),
+      password: z.string().min(10).max(128),
+    }),
+  ),
+  controller.createAuditor,
+);
+
+// Public-stats moderation: trust score source is survey-based (PRD §16.8)
+adminRoutes.patch(
+  '/public-stats',
+  validate(z.object({ trustScore: z.number().min(0).max(5) })),
+  controller.setTrustScore,
+);

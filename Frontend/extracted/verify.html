@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verify Certificate — POSH Compass</title>
+<base href="/"><!-- page is served at /verify/:certId — keep relative URLs rooted -->
+<meta name="description" content="Publicly verify a POSH Compass individual certificate (CERT-…) or organisational compliance certificate (COMP-…).">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-page="verify.html">
+
+<header id="topnav"></header>
+
+<section class="section">
+  <div class="container" style="max-width:620px">
+    <div class="section-head" style="text-align:center">
+      <span class="eyebrow">Public verification</span>
+      <h1 class="h-lg">Verify a Certificate</h1>
+      <p class="lede">Individual certificates (<span class="mono">CERT-…</span>) and organisational compliance certificates (<span class="mono">COMP-…</span>) can be verified by anyone — no account needed.</p>
+    </div>
+
+    <div class="card">
+      <form class="flex" id="verify-form" style="flex-wrap:wrap;gap:10px">
+        <input name="certId" required placeholder="e.g. CERT-2026-EMP0001-XXXX" class="mono" style="flex:1;min-width:240px">
+        <button class="btn btn-orange">Verify</button>
+      </form>
+      <div id="verify-result" class="mt-2"></div>
+    </div>
+  </div>
+</section>
+
+<footer id="footer"></footer>
+
+<script src="js/main.js"></script>
+<script src="js/api.js"></script>
+<script>
+(function () {
+  "use strict";
+  const form = document.getElementById("verify-form");
+  const out = document.getElementById("verify-result");
+
+  function row(k, v) {
+    return '<div class="row"><span class="k">' + k + '</span><span class="v">' + v + "</span></div>";
+  }
+
+  async function verify(certId) {
+    out.innerHTML = '<p class="small muted">Checking…</p>';
+    let d;
+    try {
+      d = await PC.api("/public/verify/" + encodeURIComponent(certId));
+    } catch (e) {
+      out.innerHTML =
+        '<div class="evidence"><h3>Result</h3><div class="rows">' +
+        row("Certificate", '<span class="mono">' + PC.esc(certId) + "</span>") +
+        row("Status", '<span class="badge badge-critical">✕ Not found or revoked</span>') +
+        "</div></div>" +
+        '<p class="small muted mt-1">Unknown and revoked certificates are indistinguishable by design.</p>';
+      return;
+    }
+    const statusBadge = d.status === "valid"
+      ? '<span class="badge badge-good">✓ Valid</span>'
+      : '<span class="badge badge-warning">◷ ' + PC.esc(d.status) + "</span>";
+    out.innerHTML =
+      '<div class="evidence"><h3>' + (d.type === "compliance" ? "Organisational compliance certificate" : "Individual certificate") + '</h3><div class="rows">' +
+      row("Certificate ID", '<span class="mono">' + PC.esc(d.certId) + "</span>") +
+      (d.holderName ? row("Holder", PC.esc(d.holderName)) : "") +
+      row("Organisation", PC.esc(d.organisation)) +
+      row("Status", statusBadge) +
+      (d.scoreBand ? row("Score band", PC.esc(d.scoreBand.replace(/_/g, "–"))) : "") +
+      row("Issued", PC.esc(d.issuedAt)) +
+      (d.validTill ? row("Valid till", PC.esc(d.validTill)) : "") +
+      "</div></div>" +
+      '<p class="small muted mt-1">Only minimal fields are disclosed publicly — never raw scores or assessment responses.</p>';
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    verify(form.certId.value.trim());
+  });
+
+  // Deep link: /verify/CERT-…  (server route) or ?id=CERT-…
+  const parts = window.location.pathname.split("/");
+  const fromPath = parts[parts.indexOf("verify") + 1];
+  const fromQuery = new URLSearchParams(window.location.search).get("id");
+  const initial = fromQuery || (fromPath && fromPath !== "verify.html" ? decodeURIComponent(fromPath) : null);
+  if (initial) {
+    form.certId.value = initial;
+    verify(initial);
+  }
+})();
+</script>
+</body>
+</html>

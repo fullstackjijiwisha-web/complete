@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accept Invite — POSH Compass</title>
+<base href="/"><!-- page is served at /invite/accept — keep relative URLs rooted -->
+<meta name="description" content="Activate your POSH Compass account: set a password and take your organisation's POSH assessment.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-page="invite.html">
+
+<header id="topnav"></header>
+
+<section class="section">
+  <div class="container" style="max-width:560px">
+    <div class="section-head" style="text-align:center">
+      <span class="eyebrow">Employee onboarding</span>
+      <h1 class="h-lg">Activate your account</h1>
+      <p class="lede">Your organisation has enrolled you for the annual POSH assessment. Set a password to get started.</p>
+    </div>
+
+    <div class="card" id="invite-card">
+      <div id="invite-error" class="hidden" style="background:var(--status-critical-bg);color:var(--status-critical);border:1px solid #eccccc;border-radius:8px;padding:10px 14px;font-size:0.85rem;margin-bottom:14px"></div>
+      <form id="invite-form">
+        <div class="field"><label>Invite token</label>
+          <input name="token" required minlength="64" maxlength="64" class="mono" placeholder="Auto-filled from your invite link">
+          <div class="hint">From the link in your invite email — it expires 7 days after being sent.</div>
+        </div>
+        <div class="field"><label>Set a password (min 10 characters)</label>
+          <input type="password" name="password" minlength="10" required autocomplete="new-password">
+        </div>
+        <label class="small" style="display:flex;gap:9px;align-items:flex-start;cursor:pointer;margin-bottom:16px">
+          <input type="checkbox" name="consent" required style="margin-top:3px">
+          <span>I consent to the processing of my assessment data for POSH compliance purposes (DPDP Act, 2023). My scores are visible to me and my organisation's HR admin — never to other employees.</span>
+        </label>
+        <button class="btn btn-orange btn-lg" style="width:100%;justify-content:center">Activate &amp; Continue</button>
+      </form>
+      <p class="small muted mt-2" style="text-align:center">Already activated? <a href="#" data-login style="color:var(--green-700);font-weight:600">Sign in instead</a></p>
+    </div>
+  </div>
+</section>
+
+<footer id="footer"></footer>
+
+<script src="js/main.js"></script>
+<script src="js/api.js"></script>
+<script>
+(function () {
+  "use strict";
+  const form = document.getElementById("invite-form");
+  const err = document.getElementById("invite-error");
+
+  // Token arrives via the emailed link: /invite/accept?token=…
+  const token = new URLSearchParams(window.location.search).get("token");
+  if (token) form.token.value = token;
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    err.classList.add("hidden");
+    const btn = form.querySelector("button");
+    btn.disabled = true;
+    try {
+      const data = await PC.api("/auth/invite/accept", {
+        body: { token: form.token.value.trim(), password: form.password.value, consent: form.consent.checked },
+      });
+      localStorage.setItem("pc.accessToken", data.accessToken);
+      localStorage.setItem("pc.hasSession", "1");
+      document.getElementById("invite-card").innerHTML =
+        '<div class="center" style="padding:24px">' +
+        '<span class="badge badge-good">✓ Account activated</span>' +
+        '<h2 class="h-md mt-2">Welcome, ' + PC.esc(data.user.name) + "</h2>" +
+        '<p class="small muted mt-1 mb-2">Your consent is recorded. You can take the assessment now or explore your dashboard first.</p>' +
+        '<div class="flex" style="justify-content:center">' +
+        '<a class="btn btn-orange" href="assessment.html">Take the Assessment</a>' +
+        '<a class="btn btn-ghost" href="employee.html">My Dashboard</a></div></div>';
+    } catch (ex) {
+      err.textContent = PC.backendDown(ex)
+        ? "Cannot reach the server. Start the backend with:  npm run dev  (from the project root)"
+        : ex.message;
+      err.classList.remove("hidden");
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

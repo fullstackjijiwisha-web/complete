@@ -1,0 +1,26 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa
+id_ed25519
+*.p12
+*.pfx
+dist/
+build/
+out/
+*.tsbuildinfo
+*.log
+coverage/
+.nyc_output/
+.DS_Store
+Thumbs.db
+
+# Local MongoDB data (runtime — re-seed with: npx tsx scripts/seed-questions.ts)
+mongodb-data/
+mongodb-data.backup/
+
+# Razorpay keys (README §Payments)
+server/config.json

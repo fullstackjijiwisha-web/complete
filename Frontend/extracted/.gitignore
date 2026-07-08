@@ -1,0 +1,13 @@
+# Local working files — not part of the deployable site
+.claude/
+old website/
+*.zip
+error_log
+Thumbs.db
+desktop.ini
+
+# Backend runtime data & secrets — never commit
+data/
+server/config.json
+node_modules/
+_e2e-*.html

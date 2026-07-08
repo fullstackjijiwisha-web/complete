@@ -1,0 +1,50 @@
+{
+  "name": "posh-compass-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "POSH Compass — DIY POSH assessment, certification & compliance platform API (Jijiwisha Society)",
+  "type": "commonjs",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
+    "typecheck": "tsc --noEmit",
+    "audit:high": "npm audit --audit-level=high"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@sentry/node": "^10.64.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb-memory-server": "^11.2.0",
+    "mongoose": "^9.7.4",
+    "morgan": "^1.11.0",
+    "node-cron": "^4.6.0",
+    "nodemailer": "^9.0.3",
+    "razorpay": "^2.9.6",
+    "socket.io": "^4.8.3",
+    "winston": "^3.19.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^26.1.0",
+    "@types/nodemailer": "^8.0.1",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3"
+  }
+}

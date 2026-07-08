@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organisation Dashboard — POSH Compass</title>
+<meta name="description" content="Admin view: live readiness score, completion rate, certifications, risk indicators and employee roster — computed from real assessment data.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="dash-body">
+
+<div class="dash-layout">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="dash-side">
+    <div id="side-brand"></div>
+    <span class="grp">Organisation</span>
+    <a href="dashboard.html" class="active"><span data-icon="gauge" data-size="17"></span> Dashboard</a>
+    <a href="assessment.html"><span data-icon="clipboard" data-size="17"></span> Assessments</a>
+    <a href="audit.html"><span data-icon="scale" data-size="17"></span> Audit</a>
+    <span class="grp">Views</span>
+    <a href="employee.html"><span data-icon="users" data-size="17"></span> Employee View</a>
+    <a href="index.html"><span data-icon="compassPts" data-size="17"></span> Public Site</a>
+    <div class="side-foot" id="side-foot">Loading…</div>
+  </aside>
+
+  <!-- ===== Main (rendered from GET /api/org/summary) ===== -->
+  <main class="dash-main" id="dash-root">
+    <div class="dash-header">
+      <div><h1>Dashboard Overview</h1><div class="sub">Loading live data…</div></div>
+    </div>
+  </main>
+</div>
+
+<script src="js/main.js"></script>
+<script src="js/api.js"></script>
+<script src="js/dashboard.js"></script>
+<script>document.getElementById("side-brand").innerHTML = PC.brand("index.html", true);</script>
+</body>
+</html>

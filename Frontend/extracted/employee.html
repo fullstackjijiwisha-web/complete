@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Dashboard — POSH Compass</title>
+<meta name="description" content="Employee view: personal score, attempts, certification status, improvement trend, attempt history and certificate download — from live data.">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  @media print {
+    body.print-cert > :not(#cert-modal) { display: none !important; }
+    body.print-cert #cert-modal { position: static; display: block; background: none; padding: 0; }
+    body.print-cert #cert-modal .modal { max-width: none; box-shadow: none; padding: 0; }
+    body.print-cert #cert-modal .close, body.print-cert #cert-modal .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body class="dash-body">
+
+<div class="dash-layout">
+
+  <aside class="dash-side">
+    <div id="side-brand"></div>
+    <span class="grp">My workspace</span>
+    <a href="employee.html" class="active"><span data-icon="gauge" data-size="17"></span> Dashboard</a>
+    <a href="assessment.html"><span data-icon="clipboard" data-size="17"></span> My Assessments</a>
+    <span class="grp">Views</span>
+    <a href="dashboard.html"><span data-icon="building" data-size="17"></span> Organisation View</a>
+    <a href="index.html"><span data-icon="compassPts" data-size="17"></span> Public Site</a>
+    <div class="side-foot" id="side-foot">Loading…</div>
+  </aside>
+
+  <!-- ===== Main (rendered from GET /api/attempts/mine) ===== -->
+  <main class="dash-main" id="emp-root">
+    <div class="dash-header">
+      <div><h1>My Dashboard</h1><div class="sub">Loading live data…</div></div>
+    </div>
+  </main>
+</div>
+
+<!-- Certificate modal (print target, filled from live data) -->
+<div class="modal-overlay" id="cert-modal"></div>
+
+<script src="js/main.js"></script>
+<script src="js/api.js"></script>
+<script src="js/employee.js"></script>
+<script>document.getElementById("side-brand").innerHTML = PC.brand("index.html", true);</script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assessment Engine — POSH Compass</title>
+<meta name="description" content="Scenario-based POSH assessments: MCQs, fill-in-the-blanks, case studies and simulations. Strict 80% threshold. Every submission generates audit evidence.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-page="assessment.html">
+
+<header id="topnav"></header>
+
+<section class="hero">
+  <div class="container" style="padding-top:60px;padding-bottom:52px;max-width:820px;text-align:center;margin:0 auto">
+    <span class="eyebrow on-dark">Core product</span>
+    <h1 class="h-xl" style="color:#fff">The Assessment Engine</h1>
+    <p class="lede" style="color:#d5e2da;margin:18px auto 0">Timed, scenario-based, trace-logged. Four formats measure what an employee actually understands — and every submission generates evidence an auditor can verify.</p>
+  </div>
+</section>
+
+<!-- ============ A. ENGINE (live demo) ============ -->
+<section class="section" id="engine-section">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">A · Assessment engine</span>
+      <h2 class="h-lg">Take Your Assessment</h2>
+      <p class="lede">One blended paper per attempt — MCQs, fill-in-the-blanks, case studies and live simulations, drawn fresh from a rotated question bank. Server-side timer, 80% to certify, scored entirely on the server.</p>
+    </div>
+    <div class="engine" id="engine-root"></div>
+  </div>
+</section>
+
+<!-- ============ B. ASSESSMENT TYPES ============ -->
+<section class="section" style="background:var(--surface);border-block:1px solid var(--line)">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">B · Assessment types</span>
+      <h2 class="h-lg">Each Format Measures a Different Layer</h2>
+    </div>
+    <div class="card-grid cols-2">
+      <div class="card reveal">
+        <div class="flex spread"><h3 class="h-md">MCQs</h3><span class="badge badge-good">● Live · Knowledge check</span></div>
+        <p class="small muted mt-1">Tests whether the employee knows the law: definitions, committee rules, timelines and duties under the POSH Act, 2013.</p>
+        <div class="proof-note"><span class="tag">Proof</span> Scored response with per-question timestamp and scenario ID</div>
+      </div>
+      <div class="card reveal">
+        <div class="flex spread"><h3 class="h-md">Fill in the Blanks</h3><span class="badge badge-good">● Live · Recall</span></div>
+        <p class="small muted mt-1">Validates unprompted recall — the numbers and rules an employee must produce without options to lean on.</p>
+        <div class="proof-note"><span class="tag">Proof</span> Exact response trace matched against the statutory value</div>
+      </div>
+      <div class="card reveal">
+        <div class="flex spread"><h3 class="h-md">Case Studies</h3><span class="badge badge-good">● Live · Judgment</span></div>
+        <p class="small muted mt-1">Realistic situations with weighted options. Scores the <em>quality</em> of judgment — a defensible answer earns partial credit; a harmful one earns none.</p>
+        <div class="proof-note"><span class="tag">Proof</span> Judgment score with option-weight breakdown</div>
+      </div>
+      <div class="card reveal">
+        <div class="flex spread"><h3 class="h-md">Live Simulations</h3><span class="badge badge-good">● Live · Decisions</span></div>
+        <p class="small muted mt-1">High-impact decisions taken under pressure — committee dilemmas, retaliation, leadership interference. Each choice carries a decision-impact rating.</p>
+        <div class="proof-note"><span class="tag">Proof</span> Full decision path with impact rating, audit-logged</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ C. SCORING SYSTEM ============ -->
+<section class="section">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">C · Scoring system</span>
+      <h2 class="h-lg">Strict Logic. Computed, Never Granted.</h2>
+    </div>
+    <div class="card-grid cols-2">
+      <div class="card reveal">
+        <h3 class="h-sm mb-2">Individual certification</h3>
+        <div class="meter"><div class="fill" style="width:80%"></div><div class="threshold" style="left:80%" data-label="80%"></div></div>
+        <div class="meter-scale"><span>0%</span><span>50%</span><span>100%</span></div>
+        <p class="small muted mt-2">Overall score ≥ <strong>80%</strong> → Certified Individual. 79.9% is not certified. There is no rounding up and no manual override.</p>
+      </div>
+      <div class="card reveal">
+        <h3 class="h-sm mb-2">Organisation readiness</h3>
+        <div class="meter"><div class="fill" style="width:95%"></div><div class="threshold" style="left:95%" data-label="95%"></div></div>
+        <div class="meter-scale"><span>0%</span><span>50%</span><span>100%</span></div>
+        <p class="small muted mt-2"><strong>95% of all employees</strong> must each score 80%+ for the organisation to become POSH Ready. Recomputed after every submission.</p>
+      </div>
+    </div>
+    <div class="card mt-3 reveal">
+      <h3 class="h-sm mb-2">Output states</h3>
+      <div class="card-grid cols-3">
+        <div class="io-cell"><span class="badge badge-critical">✕ Not Certified</span><p class="small muted mt-1">Below 80%. Re-training triggered; re-attempt scheduled; readiness unaffected.</p></div>
+        <div class="io-cell"><span class="badge badge-good">✓ Certified Individual</span><p class="small muted mt-1">80%+. Digital certificate issued with evidence trail; counts toward the 95% rule.</p></div>
+        <div class="io-cell"><span class="badge badge-good">★ Organisation POSH Ready</span><p class="small muted mt-1">95% rule met. Status recorded, dated, and audit booking unlocked.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ D. EVIDENCE SYSTEM ============ -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">D · Evidence system</span>
+      <h2 class="h-lg">Every Submission Leaves a Trail</h2>
+      <p class="lede">No screenshots, no attendance sheets. Five fields are generated for every single submission, automatically.</p>
+    </div>
+    <div class="card-grid cols-2" style="align-items:start">
+      <div class="card-grid" style="grid-template-columns:1fr">
+        <div class="io-cell reveal"><b>1 · Timestamp</b>ISO-8601 submission time, plus per-question elapsed time.</div>
+        <div class="io-cell reveal"><b>2 · Response trace</b>The exact option or text entered, in order, with edits recorded.</div>
+        <div class="io-cell reveal"><b>3 · Score breakdown</b>Points earned per format: knowledge, recall, judgment, decisions.</div>
+        <div class="io-cell reveal"><b>4 · Audit log reference</b>An immutable reference (e.g. <span class="mono">AUD-LOG-2026-8C41F2A0</span>) that the auditor resolves during verification.</div>
+      </div>
+      <div class="evidence reveal">
+        <h3><span data-icon="lock" data-size="16" data-color="#6fcf97"></span> Sample evidence record</h3>
+        <div class="rows">
+          <div class="row"><span class="k">Timestamp</span><span class="v">2026-06-22T10:42:17.804Z</span></div>
+          <div class="row"><span class="k">Candidate</span><span class="v">EMP-0384 · Priya Sharma</span></div>
+          <div class="row"><span class="k">Response trace</span><span class="v">8 responses · 0 unanswered · 11m 12s total</span></div>
+          <div class="row"><span class="k">Score breakdown</span><span class="v">Knowledge 20/20 · Recall 10/20 · Judgment 28/30 · Decisions 28/30</span></div>
+          <div class="row"><span class="k">Audit log ref</span><span class="v">AUD-LOG-2026-8C41F2A0</span></div>
+          <div class="row"><span class="k">Result</span><span class="v"><span class="ok">86% — CERTIFIED INDIVIDUAL</span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer id="footer"></footer>
+<script src="js/main.js"></script>
+<script src="js/api.js"></script>
+<script src="js/assessment.js"></script>
+</body>
+</html>

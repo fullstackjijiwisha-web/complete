@@ -1,0 +1,9 @@
+{
+  "name": "POSH Compass — Local",
+  "values": [
+    { "key": "baseUrl", "value": "http://localhost:5000", "enabled": true },
+    { "key": "accessToken", "value": "", "enabled": true },
+    { "key": "orgCode", "value": "", "enabled": true },
+    { "key": "employeeId", "value": "", "enabled": true }
+  ]
+}
