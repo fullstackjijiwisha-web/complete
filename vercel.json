@@ -1,13 +1,13 @@
 {
   "version": 2,
-  "buildCommand": "echo \"No build step — the static site is served straight from Frontend/extracted\"",
-  "outputDirectory": "Frontend/extracted",
-  "rewrites": [
-    { "source": "/api/v1", "destination": "/api/index" },
-    { "source": "/api/v1/:path*", "destination": "/api/index" },
-    { "source": "/health", "destination": "/api/index" },
-    { "source": "/ready", "destination": "/api/index" },
-    { "source": "/invite/accept", "destination": "/invite.html" },
-    { "source": "/verify/:certId", "destination": "/verify.html" }
+  "builds": [
+    {
+      "src": "api/index.ts",
+      "use": "@vercel/node",
+      "config": { "includeFiles": "Frontend/extracted/**" }
+    }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "api/index.ts" }
   ]
 }
