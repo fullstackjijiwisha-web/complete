@@ -40,11 +40,23 @@ export const createOrder: RequestHandler = async (req, res) => {
   const amountPaise =
     type === 'seats' ? org.headcount * seatPricePaisePerEmployee(org.headcount) : AUDIT_FEE_PAISE;
 
-  const order = await razorpay.orders.create({
-    amount: amountPaise,
-    currency: 'INR',
-    receipt: `${org.orgCode}-${type}-${Date.now()}`,
-  });
+  // Razorpay rejects sub-₹1 orders; server-computed amounts are always higher,
+  // but guard anyway (PRD §11 amounts are server-authoritative).
+  if (amountPaise < 100) {
+    throw ApiError.badRequest('Order amount must be at least 100 paise');
+  }
+
+  let order;
+  try {
+    order = await razorpay.orders.create({
+      amount: amountPaise,
+      currency: 'INR',
+      receipt: `${org.orgCode}-${type}-${Date.now()}`,
+    });
+  } catch (err) {
+    logger.error('Razorpay order creation failed', { message: (err as Error).message });
+    throw new ApiError(500, 'INTERNAL_ERROR', 'Could not create the payment order');
+  }
 
   await Payment.create({
     orgId: org._id,
@@ -118,6 +130,50 @@ export const webhook: RequestHandler = async (req, res) => {
 
   // Always 200 on verified webhooks so Razorpay doesn't retry forever.
   res.json({ success: true, data: { received: true } });
+};
+
+// Standard Checkout signature verification (Razorpay web integration STEP 3).
+// The browser posts the three fields Razorpay returns on success; we recompute
+// HMAC-SHA256(order_id + "|" + payment_id, key_secret) and only activate seats
+// when it matches. This is synchronous and does NOT depend on the webhook.
+export const verifyPayment: RequestHandler = async (req, res) => {
+  if (!env.RAZORPAY_KEY_SECRET) {
+    throw new ApiError(503, 'PAYMENTS_NOT_CONFIGURED', 'Payment gateway is not configured');
+  }
+
+  const orderId = req.body.razorpay_order_id as string | undefined;
+  const paymentId = req.body.razorpay_payment_id as string | undefined;
+  const signature = req.body.razorpay_signature as string | undefined;
+  if (!orderId || !paymentId || !signature) {
+    throw ApiError.badRequest('Missing razorpay_order_id, razorpay_payment_id or razorpay_signature');
+  }
+
+  const expected = hmacSha256Hex(env.RAZORPAY_KEY_SECRET, `${orderId}|${paymentId}`);
+  if (!safeCompare(expected, signature)) {
+    logger.warn('Razorpay payment signature mismatch', { orderId });
+    // 400 and NOT marked paid (Razorpay web integration error handling).
+    throw ApiError.badRequest('Payment signature verification failed', 'INVALID_REQUEST');
+  }
+
+  // Signature valid — mark the order paid and activate seats for its owner org.
+  const payment = await Payment.findOne({ razorpayOrderId: orderId });
+  if (!payment || payment.orgId.toString() !== authOrgId(req)) {
+    throw ApiError.notFound('Order not found for this organisation');
+  }
+  payment.status = 'paid';
+  payment.webhookVerifiedAt = new Date();
+  await payment.save();
+
+  if (payment.type === 'seats') {
+    await Organisation.updateOne({ _id: payment.orgId }, { $set: { seatsActive: true } });
+    await logAudit('payment.seats_activated', 'Organisation', payment.orgId.toString(), undefined, {
+      source: 'razorpay_checkout',
+      orderId,
+      paymentId,
+    });
+  }
+
+  res.json({ success: true, data: { verified: true, type: payment.type } });
 };
 
 export const mockActivate: RequestHandler = async (req, res) => {

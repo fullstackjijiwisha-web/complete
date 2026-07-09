@@ -291,43 +291,48 @@
       name: "POSH Compass",
       description: (me && me.org ? me.org.name + " · " : "") + "assessment seats",
       theme: { color: "#0e3626" },
-      handler: function () { awaitSeatActivation(onPaid); },
+      // On success Razorpay returns the three fields we verify server-side.
+      handler: function (response) { verifyRazorpayPayment(response, onPaid); },
+      modal: {
+        ondismiss: function () { /* user cancelled the payment — nothing to do */ },
+      },
+    });
+    // Razorpay fires this when a payment attempt fails inside the modal.
+    rzp.on("payment.failed", function (resp) {
+      const desc = resp && resp.error && resp.error.description;
+      alertModal("Payment failed", escapeH(desc || "The payment could not be completed. Please try again."));
     });
     rzp.open();
   };
 
-  /* Seats flip on the server only after Razorpay's webhook is verified —
-     poll the org record until it lands. */
-  function awaitSeatActivation(onPaid) {
+  /* Standard Checkout verification: send the three fields to the server, which
+     recomputes the signature. Seats flip only if the signature is valid. */
+  async function verifyRazorpayPayment(response, onPaid) {
     const m = document.createElement("div");
     m.className = "modal-overlay open";
     m.innerHTML =
       '<div class="modal"><span class="badge badge-good">✓ Payment received</span>' +
-      '<h2 class="mt-2">Activating your seats…</h2>' +
-      '<p class="small muted" id="pay-wait-msg">Waiting for the payment gateway to confirm (webhook verification). This usually takes a few seconds.</p></div>';
+      '<h2 class="mt-2">Verifying payment…</h2>' +
+      '<p class="small muted">Confirming the payment signature with the server.</p></div>';
     document.body.appendChild(m);
-    let tries = 0;
-    const timer = setInterval(async function () {
-      tries++;
-      try {
-        const org = await PC.api("/orgs/me");
-        if (org.seatsActive) {
-          clearInterval(timer);
-          m.remove();
-          alertModal("✓ Assessments unlocked",
-            "Payment verified — every enrolled employee can now take the assessment.",
-            [{ label: "Open Dashboard", href: "dashboard.html" }]);
-          if (onPaid) onPaid();
-          return;
-        }
-      } catch (e) { /* keep polling */ }
-      if (tries >= 15) {
-        clearInterval(timer);
-        m.remove();
-        alertModal("Payment received — confirmation pending",
-          "The gateway has not confirmed yet. Seats activate automatically as soon as the webhook lands; check the dashboard in a minute.");
-      }
-    }, 2500);
+    try {
+      await PC.api("/payments/verify", {
+        body: {
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+        },
+      });
+      m.remove();
+      alertModal("✓ Assessments unlocked",
+        "Payment verified — every enrolled employee can now take the assessment.",
+        [{ label: "Open Dashboard", href: "dashboard.html" }]);
+      if (onPaid) onPaid();
+    } catch (e) {
+      m.remove();
+      alertModal("Payment verification failed",
+        escapeH(e.message || "We couldn't verify this payment. If you were charged, contact support with your payment ID."));
+    }
   }
 
   PC.simulatePaymentUnlock = async function (onPaid, skipAlert) {

@@ -17,6 +17,21 @@ paymentRoutes.post(
   controller.createOrder,
 );
 
+// Standard Checkout signature verification (missing fields → 400 via validate).
+paymentRoutes.post(
+  '/verify',
+  requireAuth,
+  roleGuard('hr_admin'),
+  validate(
+    z.object({
+      razorpay_order_id: z.string().min(1),
+      razorpay_payment_id: z.string().min(1),
+      razorpay_signature: z.string().min(1),
+    }),
+  ),
+  controller.verifyPayment,
+);
+
 paymentRoutes.post(
   '/mock-activate',
   requireAuth,
