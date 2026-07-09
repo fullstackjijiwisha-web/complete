@@ -129,25 +129,42 @@ export const mockActivate: RequestHandler = async (req, res) => {
   res.json({ success: true, message: 'Seats mock-activated successfully' });
 };
 
-// ── Shopify checkout (flat per-seat product; quantity = headcount) ──────────
-const shopifyConfigured = Boolean(env.SHOPIFY_STORE_DOMAIN && env.SHOPIFY_SEAT_VARIANT_ID);
+// ── Shopify checkout (one variant per pricing tier; quantity = headcount) ────
+// Boundaries mirror seatPricePaisePerEmployee so the Shopify total equals the
+// app's tiered price exactly (tier rate × headcount).
+function seatVariantForHeadcount(headcount: number): string | undefined {
+  if (headcount <= 30) return env.SHOPIFY_VARIANT_TIER1;
+  if (headcount <= 100) return env.SHOPIFY_VARIANT_TIER2;
+  if (headcount <= 200) return env.SHOPIFY_VARIANT_TIER3;
+  return env.SHOPIFY_VARIANT_TIER4;
+}
 
-// Returns a Shopify cart permalink for the org's headcount. The org is matched
-// back to us at webhook time by the orgCode cart attribute and, as a fallback,
-// by the pre-filled HR-admin email (see shopifyWebhook).
+// Returns a Shopify cart permalink for the org's headcount, picking the variant
+// whose price matches the org's tier. The org is matched back to us at webhook
+// time by the orgCode cart attribute and, as a fallback, by the pre-filled
+// HR-admin email (see shopifyWebhook).
 export const shopifyCheckout: RequestHandler = async (req, res) => {
-  if (!shopifyConfigured) {
+  if (!env.SHOPIFY_STORE_DOMAIN) {
     throw new ApiError(503, 'PAYMENTS_NOT_CONFIGURED', 'Shopify checkout is not configured');
   }
   const org = await Organisation.findOne({ _id: authOrgId(req), isDeleted: false });
   if (!org) throw ApiError.notFound();
-  const admin = await User.findOne({ orgId: org._id, role: 'hr_admin', isDeleted: false }).select('email');
 
+  const variantId = seatVariantForHeadcount(org.headcount);
+  if (!variantId) {
+    throw new ApiError(
+      503,
+      'PAYMENTS_NOT_CONFIGURED',
+      'No Shopify seat variant is configured for this headcount tier',
+    );
+  }
+
+  const admin = await User.findOne({ orgId: org._id, role: 'hr_admin', isDeleted: false }).select('email');
   const qty = Math.max(1, org.headcount);
   const params = new URLSearchParams();
   params.set('attributes[orgCode]', org.orgCode);
   if (admin?.email) params.set('checkout[email]', admin.email);
-  const url = `https://${env.SHOPIFY_STORE_DOMAIN}/cart/${env.SHOPIFY_SEAT_VARIANT_ID}:${qty}?${params.toString()}`;
+  const url = `https://${env.SHOPIFY_STORE_DOMAIN}/cart/${variantId}:${qty}?${params.toString()}`;
 
   res.json({ success: true, data: { url } });
 };

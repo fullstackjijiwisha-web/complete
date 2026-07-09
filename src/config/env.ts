@@ -60,11 +60,16 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 
-  // Shopify checkout for seat purchases (flat per-seat product, qty = headcount).
-  // STORE_DOMAIN like "posh-compass.myshopify.com"; VARIANT_ID is the numeric
-  // product-variant id; WEBHOOK_SECRET is the app's webhook signing secret.
+  // Shopify checkout for seat purchases. STORE_DOMAIN like
+  // "posh-compass.myshopify.com"; WEBHOOK_SECRET is the webhook signing secret.
+  // One seat-product variant per pricing tier (qty = headcount), so the tiered
+  // ₹48/36/24/12 rates are reproduced exactly:
+  //   TIER1 ≤30 · TIER2 31–100 · TIER3 101–200 · TIER4 201+
   SHOPIFY_STORE_DOMAIN: z.string().optional(),
-  SHOPIFY_SEAT_VARIANT_ID: z.string().optional(),
+  SHOPIFY_VARIANT_TIER1: z.string().optional(),
+  SHOPIFY_VARIANT_TIER2: z.string().optional(),
+  SHOPIFY_VARIANT_TIER3: z.string().optional(),
+  SHOPIFY_VARIANT_TIER4: z.string().optional(),
   SHOPIFY_WEBHOOK_SECRET: z.string().optional(),
 
   CERT_VERIFY_BASE_URL: z.string().default('http://localhost:5173/verify'),
