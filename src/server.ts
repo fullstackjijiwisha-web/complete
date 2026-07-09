@@ -1,13 +1,12 @@
 import http from 'http';
 import * as Sentry from '@sentry/node';
-import bcrypt from 'bcryptjs';
 import { env } from './config/env';
-import { connectDb, disconnectDb } from './config/db';
+import { disconnectDb } from './config/db';
 import { createApp } from './app';
 import { initSockets } from './sockets';
 import { startCronJobs } from './services/cron.service';
 import { logger } from './utils/logger';
-import { User } from './modules/users/user.model';
+import { prepareRuntime } from './bootstrap';
 
 // Sentry first, with PII scrubbing (blueprint §6).
 if (env.SENTRY_DSN) {
@@ -25,23 +24,8 @@ if (env.SENTRY_DSN) {
   });
 }
 
-async function seedSuperAdmin(): Promise<void> {
-  if (!env.SUPER_ADMIN_EMAIL || !env.SUPER_ADMIN_PASSWORD) return;
-  const existing = await User.findOne({ email: env.SUPER_ADMIN_EMAIL.toLowerCase() });
-  if (existing) return;
-  await User.create({
-    email: env.SUPER_ADMIN_EMAIL,
-    name: 'Jijiwisha Super Admin',
-    role: 'super_admin',
-    passwordHash: await bcrypt.hash(env.SUPER_ADMIN_PASSWORD, 12),
-    status: 'active',
-  });
-  logger.info('Super admin account seeded');
-}
-
 async function main(): Promise<void> {
-  await connectDb();
-  await seedSuperAdmin();
+  await prepareRuntime();
 
   const app = createApp();
   const server = http.createServer(app);

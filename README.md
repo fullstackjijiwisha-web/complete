@@ -78,8 +78,10 @@ CI baseline (blueprint §9): `npm ci` → `npm run typecheck` → tests (when ad
 
 ## Deployment notes
 
-- `SameSite=Strict` refresh cookie **will not survive cross-site deployment** (frontend on Vercel domain + API on Render domain are different sites). Serve both under one site, e.g. `poshcompass.jijiwishasociety.org` + `api.poshcompass.jijiwishasociety.org`, or the refresh flow breaks silently.
-- Set `trust proxy` is already on (needed for rate-limit + secure cookies behind Render/Railway).
+- Vercel deployment is supported through `vercel.json`: it serves the static frontend from `Frontend/extracted/` and rewrites `/api/v1/*`, `/health`, and `/ready` to the serverless API entrypoint.
+- Set `MONGODB_URI`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, and `CORS_ORIGINS` in Vercel. Use Atlas or another hosted MongoDB; the local memory server stays for local dev only.
+- The refresh cookie remains same-origin on Vercel because the frontend and API share the same deployment domain.
+- `trust proxy` is already on (needed for rate-limit + secure cookies behind Render/Railway/Vercel).
 - Audit document upload stores metadata only — object storage (signed S3/Cloudinary upload) is an open infra decision (PRD §16).
 
 ## API
