@@ -60,6 +60,13 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 
+  // Shopify checkout for seat purchases (flat per-seat product, qty = headcount).
+  // STORE_DOMAIN like "posh-compass.myshopify.com"; VARIANT_ID is the numeric
+  // product-variant id; WEBHOOK_SECRET is the app's webhook signing secret.
+  SHOPIFY_STORE_DOMAIN: z.string().optional(),
+  SHOPIFY_SEAT_VARIANT_ID: z.string().optional(),
+  SHOPIFY_WEBHOOK_SECRET: z.string().optional(),
+
   CERT_VERIFY_BASE_URL: z.string().default('http://localhost:5173/verify'),
   CERT_SIGNING_SECRET: z.string().min(32).optional(),
 

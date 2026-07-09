@@ -262,6 +262,12 @@
     });
   };
 
+  /* ---------------- Shopify checkout (redirect out to Shopify to pay) ---------------- */
+  PC.startShopifyCheckout = async function () {
+    const data = await PC.api("/payments/shopify/checkout", { method: "POST", body: {} });
+    window.location.href = data.url; // seats flip via the Shopify order webhook
+  };
+
   /* ---------------- payment flow (Razorpay orders + webhook) ---------------- */
   PC.startPayment = async function (onPaid) {
     let order;

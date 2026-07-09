@@ -223,8 +223,20 @@
 
     /* wire up */
     const pay = document.getElementById("btn-dash-pay");
-    if (pay) pay.addEventListener("click", function () {
-      PC.startPayment(function () { load(); });
+    if (pay) pay.addEventListener("click", async function () {
+      pay.disabled = true;
+      try {
+        // Primary path: pay via Shopify (redirects out). Seats flip when the
+        // Shopify order webhook lands.
+        await PC.startShopifyCheckout();
+      } catch (e) {
+        pay.disabled = false;
+        if (e && e.code === "PAYMENTS_NOT_CONFIGURED") {
+          PC.startPayment(function () { load(); }); // fall back to Razorpay/mock
+        } else {
+          alert("Could not start checkout: " + (e.message || e));
+        }
+      }
     });
 
     wireEnrolForm();

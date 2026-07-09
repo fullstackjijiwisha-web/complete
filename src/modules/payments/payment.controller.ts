@@ -1,7 +1,9 @@
 import type { RequestHandler } from 'express';
+import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import { Payment } from './payment.model';
 import { Organisation } from '../organisations/organisation.model';
+import { User } from '../users/user.model';
 import { ApiError } from '../../utils/ApiError';
 import { authOrgId } from '../../utils/authUser';
 import { env } from '../../config/env';
@@ -125,5 +127,95 @@ export const mockActivate: RequestHandler = async (req, res) => {
     mock: true,
   });
   res.json({ success: true, message: 'Seats mock-activated successfully' });
+};
+
+// ── Shopify checkout (flat per-seat product; quantity = headcount) ──────────
+const shopifyConfigured = Boolean(env.SHOPIFY_STORE_DOMAIN && env.SHOPIFY_SEAT_VARIANT_ID);
+
+// Returns a Shopify cart permalink for the org's headcount. The org is matched
+// back to us at webhook time by the orgCode cart attribute and, as a fallback,
+// by the pre-filled HR-admin email (see shopifyWebhook).
+export const shopifyCheckout: RequestHandler = async (req, res) => {
+  if (!shopifyConfigured) {
+    throw new ApiError(503, 'PAYMENTS_NOT_CONFIGURED', 'Shopify checkout is not configured');
+  }
+  const org = await Organisation.findOne({ _id: authOrgId(req), isDeleted: false });
+  if (!org) throw ApiError.notFound();
+  const admin = await User.findOne({ orgId: org._id, role: 'hr_admin', isDeleted: false }).select('email');
+
+  const qty = Math.max(1, org.headcount);
+  const params = new URLSearchParams();
+  params.set('attributes[orgCode]', org.orgCode);
+  if (admin?.email) params.set('checkout[email]', admin.email);
+  const url = `https://${env.SHOPIFY_STORE_DOMAIN}/cart/${env.SHOPIFY_SEAT_VARIANT_ID}:${qty}?${params.toString()}`;
+
+  res.json({ success: true, data: { url } });
+};
+
+// Shopify order webhook. Mounted with express.raw() BEFORE the JSON parser so
+// the HMAC covers the exact bytes Shopify signed (base64). On a paid order we
+// match the organisation and activate its seats — idempotently.
+export const shopifyWebhook: RequestHandler = async (req, res) => {
+  if (!env.SHOPIFY_WEBHOOK_SECRET) {
+    res.status(503).json({ success: false, error: { code: 'PAYMENTS_NOT_CONFIGURED', message: 'Webhook not configured' } });
+    return;
+  }
+  const hmacHeader = req.headers['x-shopify-hmac-sha256'];
+  const rawBody = req.body as Buffer;
+  if (typeof hmacHeader !== 'string' || !Buffer.isBuffer(rawBody)) {
+    res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: 'Bad webhook payload' } });
+    return;
+  }
+
+  const digest = crypto.createHmac('sha256', env.SHOPIFY_WEBHOOK_SECRET).update(rawBody).digest('base64');
+  if (!safeCompare(digest, hmacHeader)) {
+    logger.warn('Shopify webhook signature mismatch');
+    res.status(401).json({ success: false, error: { code: 'INVALID_REQUEST', message: 'Signature verification failed' } });
+    return;
+  }
+
+  const order = JSON.parse(rawBody.toString('utf8')) as {
+    id?: number | string;
+    email?: string;
+    financial_status?: string;
+    note_attributes?: Array<{ name: string; value: string }>;
+    total_price?: string;
+  };
+
+  // Only paid orders activate seats.
+  if (order.financial_status !== 'paid') {
+    res.json({ success: true, data: { ignored: true } });
+    return;
+  }
+
+  // Identify the org: orgCode cart attribute first, then the buyer's email.
+  const attrOrgCode = order.note_attributes?.find((a) => a.name === 'orgCode')?.value;
+  let org = attrOrgCode
+    ? await Organisation.findOne({ orgCode: attrOrgCode, isDeleted: false })
+    : null;
+  if (!org && order.email) {
+    const admin = await User.findOne({ email: order.email.toLowerCase(), role: 'hr_admin', isDeleted: false });
+    if (admin?.orgId) org = await Organisation.findById(admin.orgId);
+  }
+  if (!org) {
+    logger.warn('Shopify order could not be matched to an org', { orderId: order.id, email: order.email });
+    res.json({ success: true, data: { received: true, matched: false } });
+    return;
+  }
+
+  const orderRef = `shopify-${order.id}`;
+  const amountPaise = order.total_price ? Math.round(parseFloat(order.total_price) * 100) : 0;
+  await Payment.findOneAndUpdate(
+    { razorpayOrderId: orderRef },
+    { $set: { orgId: org._id, type: 'seats', provider: 'shopify', amountPaise, status: 'paid', webhookVerifiedAt: new Date() } },
+    { upsert: true, new: true },
+  );
+  await Organisation.updateOne({ _id: org._id }, { $set: { seatsActive: true } });
+  await logAudit('payment.seats_activated', 'Organisation', org.id, undefined, {
+    source: 'shopify',
+    orderId: order.id,
+  });
+
+  res.json({ success: true, data: { received: true, matched: true } });
 };
 

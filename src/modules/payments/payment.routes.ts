@@ -23,3 +23,11 @@ paymentRoutes.post(
   roleGuard('hr_admin'),
   controller.mockActivate,
 );
+
+// Returns a Shopify checkout URL for the org's seats (see shopifyCheckout).
+paymentRoutes.post(
+  '/shopify/checkout',
+  requireAuth,
+  roleGuard('hr_admin'),
+  controller.shopifyCheckout,
+);

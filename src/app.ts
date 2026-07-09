@@ -21,7 +21,7 @@ import { auditRoutes } from './modules/audits/audit.routes';
 import { paymentRoutes } from './modules/payments/payment.routes';
 import { publicRoutes } from './modules/stats/stats.routes';
 import { adminRoutes } from './modules/admin/admin.routes';
-import { webhook as razorpayWebhook } from './modules/payments/payment.controller';
+import { webhook as razorpayWebhook, shopifyWebhook } from './modules/payments/payment.controller';
 
 export function createApp(): Express {
   const app = express();
@@ -65,9 +65,10 @@ export function createApp(): Express {
     }),
   );
 
-  // 3. Razorpay webhook BEFORE the JSON parser — the HMAC signature covers
-  //    the exact raw bytes (PRD §11).
+  // 3. Payment webhooks BEFORE the JSON parser — each HMAC signature covers the
+  //    exact raw bytes (PRD §11).
   app.post('/api/v1/payments/webhook', express.raw({ type: 'application/json' }), razorpayWebhook);
+  app.post('/api/v1/payments/shopify/webhook', express.raw({ type: 'application/json' }), shopifyWebhook);
 
   // 4. Body parsing (CSV import mounts its own text parser route-level)
   app.use(express.json({ limit: '10kb' }));
