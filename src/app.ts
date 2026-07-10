@@ -7,6 +7,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 import { env } from './config/env';
+import { logger } from './utils/logger';
 import { dbIsReady } from './config/db';
 import { sanitizeRequest } from './middleware/sanitize';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -118,6 +119,8 @@ export function createApp(): Express {
   //    credentialed fetches only work when site and API share an origin).
   if (env.FRONTEND_DIR) {
     const frontendDir = path.resolve(process.cwd(), env.FRONTEND_DIR);
+    const exists = require('fs').existsSync(frontendDir);
+    logger.info(`Static frontend resolution: ${frontendDir} (exists: ${exists})`);
     // Clean URLs used in emailed links / certificate verifyUrl:
     app.get('/invite/accept', (_req, res) => res.sendFile(path.join(frontendDir, 'invite.html')));
     app.get('/verify/:certId', (_req, res) => res.sendFile(path.join(frontendDir, 'verify.html')));
