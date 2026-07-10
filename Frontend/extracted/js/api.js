@@ -670,6 +670,28 @@
   }
   PC.esc = escapeH;
 
+  PC.downloadFile = async function (path, filename) {
+    try {
+      let res = await rawFetch(path);
+      if (res.status === 401 && hasSession()) {
+        const renewed = await refreshAccessToken();
+        if (renewed) res = await rawFetch(path);
+      }
+      if (!res.ok) throw new Error("Download failed with status " + res.status);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alertModal("Download failed", escapeH(e.message));
+    }
+  };
+
   /* ---------------- session-aware nav ---------------- */
   function renderSessionUi(user) {
     const cta = document.querySelector(".nav-cta");
