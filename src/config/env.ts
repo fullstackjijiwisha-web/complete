@@ -25,6 +25,9 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  // Brevo transactional email HTTP API key (xkeysib-…). Preferred over SMTP on
+  // hosts that block outbound SMTP ports (e.g. Render) — it sends over HTTPS.
+  BREVO_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('noreply@jijiwishasociety.org'),
   // Jijiwisha ops inbox — CC'd on every issued certificate and on POSH Ready.
   JIJIWISHA_NOTIFY_EMAIL: z.string().default('fullstackjijiwisha@gmail.com'),
