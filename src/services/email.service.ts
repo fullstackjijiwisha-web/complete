@@ -12,6 +12,20 @@ if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
     secure: (env.SMTP_PORT ?? 465) === 465,
     auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
   });
+  logger.info('SMTP configured — emails WILL be sent', {
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT ?? 465,
+    from: env.EMAIL_FROM,
+  });
+} else {
+  // Startup diagnostic: shows exactly which SMTP variable is absent so a
+  // misconfigured deployment is obvious in the logs instead of silently
+  // falling back to log-only mode.
+  logger.warn('SMTP NOT configured — emails are LOGGED, not sent. Check these Render env vars:', {
+    SMTP_HOST: env.SMTP_HOST ? 'set' : 'MISSING',
+    SMTP_USER: env.SMTP_USER ? 'set' : 'MISSING',
+    SMTP_PASS: env.SMTP_PASS ? 'set' : 'MISSING',
+  });
 }
 
 export interface EmailMessage {
