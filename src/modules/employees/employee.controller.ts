@@ -75,7 +75,8 @@ export const listEmployees: RequestHandler = async (req, res) => {
 
 export const addEmployee: RequestHandler = async (req, res) => {
   const orgId = authOrgId(req);
-  const result = await createEmployee(orgId, req.body);
+  const originUrl = req.protocol + '://' + req.get('host');
+  const result = await createEmployee(orgId, req.body, originUrl);
   await recomputeReadiness(orgId);
   res.status(201).json({ success: true, data: result });
 };
@@ -101,6 +102,7 @@ export const importEmployees: RequestHandler = async (req, res) => {
   const created: Array<{ row: number; email: string; employeeCode: string }> = [];
   const errors: Array<{ row: number; error: string }> = [];
 
+  const originUrl = req.protocol + '://' + req.get('host');
   for (let i = startIdx; i < rows.length; i++) {
     const cols = rows[i] ?? [];
     const whatsapp = (cols[2] ?? '').trim();
@@ -115,7 +117,7 @@ export const importEmployees: RequestHandler = async (req, res) => {
       continue;
     }
     try {
-      const result = await createEmployee(orgId, parsedRow.data);
+      const result = await createEmployee(orgId, parsedRow.data, originUrl);
       created.push({ row: i + 1, email: parsedRow.data.email, employeeCode: result.employeeCode });
     } catch (err) {
       errors.push({ row: i + 1, error: err instanceof ApiError ? err.message : 'Failed to create' });
@@ -147,7 +149,8 @@ export const resendInvite: RequestHandler = async (req, res) => {
   if (employee.status !== 'invited') throw ApiError.badRequest('Employee has already activated their account');
 
   const org = await Organisation.findById(orgId);
-  await issueInvite(employee.id, orgId, employee.email, org?.name ?? 'Your organisation', employee.whatsapp);
+  const originUrl = req.protocol + '://' + req.get('host');
+  await issueInvite(employee.id, orgId, employee.email, org?.name ?? 'Your organisation', employee.whatsapp, originUrl);
   res.json({ success: true, data: { resent: true } });
 };
 
