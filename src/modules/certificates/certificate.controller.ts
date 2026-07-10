@@ -27,6 +27,17 @@ export const getMine: RequestHandler = async (req, res) => {
   });
 };
 
+// Escape HTML entities to prevent XSS in server-rendered certificate pages.
+// User names and org names are untrusted — they must never be injected raw.
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Server-rendered printable certificate ("PDF via print dialog" per the mock).
 // TODO(P1): true PDF via Puppeteer or @react-pdf/renderer, plus HMAC-signed QR
 // payload using CERT_SIGNING_SECRET (PRD §11).
@@ -41,8 +52,14 @@ export const getMinePdf: RequestHandler = async (req, res) => {
   const [user, org] = await Promise.all([User.findById(userId), Organisation.findById(cert.orgId)]);
   const verifyUrl = `${env.CERT_VERIFY_BASE_URL}/${cert.certId}`;
 
+  const safeName = escapeHtml(user?.name ?? '');
+  const safeOrg = escapeHtml(org?.name ?? '');
+  const safeCertId = escapeHtml(cert.certId);
+  const safeVerifyUrl = escapeHtml(verifyUrl);
+  const safeDate = escapeHtml(cert.issuedAt.toISOString().slice(0, 10));
+
   res.type('html').send(`<!doctype html>
-<html><head><meta charset="utf-8"><title>${cert.certId}</title>
+<html><head><meta charset="utf-8"><title>${safeCertId}</title>
 <style>
   body { font-family: Georgia, serif; background: #f6f3ea; margin: 0; padding: 48px; }
   .frame { max-width: 720px; margin: 0 auto; background: #fffdf7; border: 3px double #123b2a; padding: 56px; text-align: center; }
@@ -57,10 +74,10 @@ export const getMinePdf: RequestHandler = async (req, res) => {
     <div class="brand">✦ POSH COMPASS</div>
     <h1>Certificate of Completion</h1>
     <p class="muted">This is to certify that</p>
-    <div class="name">${user?.name ?? ''}</div>
+    <div class="name">${safeName}</div>
     <p>has successfully completed the POSH Assessment<br>with a score of <strong>${cert.score}%</strong>.</p>
-    <p class="muted">${org?.name ?? ''}</p>
-    <div class="meta">${cert.certId} · ${cert.issuedAt.toISOString().slice(0, 10)}<br>Verify: ${verifyUrl}</div>
+    <p class="muted">${safeOrg}</p>
+    <div class="meta">${safeCertId} · ${safeDate}<br>Verify: ${safeVerifyUrl}</div>
   </div>
   <script>window.print()</script>
 </body></html>`);

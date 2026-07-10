@@ -19,6 +19,16 @@ organisationRoutes.patch(
         .object({ start: z.coerce.date(), end: z.coerce.date() })
         .refine((p) => p.end > p.start, { message: 'end must be after start' })
         .optional(),
+      industry: z.string().min(1).max(100).optional(),
+      companySize: z.enum(['micro', 'small', 'medium', 'large']).optional(),
+      /** GST is optional — format varies by state */
+      gst: z.string().max(20).optional().nullable(),
+      billingContact: z
+        .object({
+          name: z.string().min(1).max(120).optional(),
+          email: z.string().email().max(254).optional(),
+        })
+        .optional(),
     }),
   ),
   controller.patchMyOrg,

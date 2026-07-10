@@ -19,6 +19,10 @@ export const getMyOrg: RequestHandler = async (req, res) => {
       name: org.name,
       orgCode: org.orgCode,
       registrationNo: org.registrationNo,
+      industry: org.industry ?? null,
+      companySize: org.companySize ?? null,
+      gst: org.gst ?? null,
+      billingContact: org.billingContact ?? null,
       headcount: org.headcount,
       reportingPeriod: org.reportingPeriod ?? null,
       seatsActive: org.seatsActive,
@@ -32,6 +36,10 @@ export const patchMyOrg: RequestHandler = async (req, res) => {
   const update: Record<string, unknown> = {};
   if (req.body.headcount !== undefined) update.headcount = req.body.headcount;
   if (req.body.reportingPeriod !== undefined) update.reportingPeriod = req.body.reportingPeriod;
+  if (req.body.industry !== undefined) update.industry = req.body.industry;
+  if (req.body.companySize !== undefined) update.companySize = req.body.companySize;
+  if (req.body.gst !== undefined) update.gst = req.body.gst;
+  if (req.body.billingContact !== undefined) update.billingContact = req.body.billingContact;
 
   const org = await Organisation.findOneAndUpdate(
     { _id: authOrgId(req), isDeleted: false },
@@ -68,6 +76,16 @@ export const getReadyCertificate: RequestHandler = async (req, res) => {
   });
 };
 
+// Escape HTML entities to prevent XSS in server-rendered certificate pages.
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Printable POSH Ready certificate — mirrors the individual cert print view,
 // but branded 'READY' and worded so it is never mistaken for POSH Compliant.
 export const getReadyCertificatePdf: RequestHandler = async (req, res) => {
@@ -77,8 +95,15 @@ export const getReadyCertificatePdf: RequestHandler = async (req, res) => {
   if (!ready) throw ApiError.notFound('Not POSH Ready yet — no certificate issued');
   const verifyUrl = `${env.CERT_VERIFY_BASE_URL}/${ready.readyId}`;
 
+  const safeOrgName = escapeHtml(org.name);
+  const safeReadyId = escapeHtml(ready.readyId);
+  const safeVerifyUrl = escapeHtml(verifyUrl);
+  const safeDate = escapeHtml(ready.issuedAt.toISOString().slice(0, 10));
+  const safeCycle = escapeHtml(ready.cycle);
+  const safeScore = String(ready.score);
+
   res.type('html').send(`<!doctype html>
-<html><head><meta charset="utf-8"><title>${ready.readyId}</title>
+<html><head><meta charset="utf-8"><title>${safeReadyId}</title>
 <style>
   body { font-family: Georgia, serif; background: #f6f3ea; margin: 0; padding: 48px; }
   .frame { max-width: 720px; margin: 0 auto; background: #fffdf7; border: 3px double #123b2a; padding: 56px; text-align: center; }
@@ -95,11 +120,11 @@ export const getReadyCertificatePdf: RequestHandler = async (req, res) => {
     <div class="brand">✦ POSH COMPASS</div>
     <h1>Certificate of POSH Readiness</h1>
     <p class="muted">This is to certify that</p>
-    <div class="name">${org.name}</div>
-    <p>has achieved <strong>POSH Ready</strong> status with ${ready.score}% of enrolled<br>employees certified for ${ready.cycle}.</p>
+    <div class="name">${safeOrgName}</div>
+    <p>has achieved <strong>POSH Ready</strong> status with ${safeScore}% of enrolled<br>employees certified for ${safeCycle}.</p>
     <div class="badge">✓ POSH Ready — self-assessed</div>
     <p class="disclaimer">POSH Ready attests self-assessed readiness. It is <strong>not</strong> the audited POSH Compliant certificate, which is issued by Jijiwisha Society after an audit.</p>
-    <div class="meta">${ready.readyId} · ${ready.issuedAt.toISOString().slice(0, 10)}<br>Verify: ${verifyUrl}</div>
+    <div class="meta">${safeReadyId} · ${safeDate}<br>Verify: ${safeVerifyUrl}</div>
   </div>
   <script>window.print()</script>
 </body></html>`);

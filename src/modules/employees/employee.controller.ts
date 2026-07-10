@@ -74,7 +74,9 @@ export const listEmployees: RequestHandler = async (req, res) => {
 };
 
 export const addEmployee: RequestHandler = async (req, res) => {
-  const result = await createEmployee(authOrgId(req), req.body);
+  const orgId = authOrgId(req);
+  const result = await createEmployee(orgId, req.body);
+  await recomputeReadiness(orgId);
   res.status(201).json({ success: true, data: result });
 };
 
@@ -86,8 +88,9 @@ const importRowSchema = z.object({
 
 // Bulk enrolment from raw CSV (Content-Type: text/csv). Columns: name,email,whatsapp
 // (whatsapp optional). Every row is re-validated server-side; a per-row error
-// report is returned.
+// report is returned and saved for download.
 export const importEmployees: RequestHandler = async (req, res) => {
+  const orgId = authOrgId(req);
   const raw = typeof req.body === 'string' ? req.body : '';
   if (!raw.trim()) throw ApiError.badRequest('Empty CSV body');
 
@@ -112,11 +115,18 @@ export const importEmployees: RequestHandler = async (req, res) => {
       continue;
     }
     try {
-      const result = await createEmployee(authOrgId(req), parsedRow.data);
+      const result = await createEmployee(orgId, parsedRow.data);
       created.push({ row: i + 1, email: parsedRow.data.email, employeeCode: result.employeeCode });
     } catch (err) {
       errors.push({ row: i + 1, error: err instanceof ApiError ? err.message : 'Failed to create' });
     }
+  }
+
+  // Save the latest errors to the organisation document so they are downloadable.
+  await Organisation.updateOne({ _id: orgId }, { $set: { lastImportErrors: errors } });
+
+  if (created.length > 0) {
+    await recomputeReadiness(orgId);
   }
 
   res.status(errors.length && !created.length ? 400 : 201).json({
@@ -176,3 +186,35 @@ export const removeEmployee: RequestHandler = async (req, res) => {
   await recomputeReadiness(orgId);
   res.json({ success: true, data: { removed: true } });
 };
+
+// Returns a blank CSV template so HR admins know the required column headers
+// and format before attempting an import. No auth data in the template.
+export const downloadImportTemplate: RequestHandler = (_req, res) => {
+  const header = 'name,email,whatsapp\n';
+  const example = '"Priya Sharma",priya.sharma@example.com,+919876543210\n';
+  res
+    .type('text/csv')
+    .setHeader('Content-Disposition', 'attachment; filename="employee-import-template.csv"')
+    .send(header + example);
+};
+
+// Exposes a downloadable CSV error report of the last CSV bulk upload.
+export const downloadImportErrors: RequestHandler = async (req, res) => {
+  const orgId = authOrgId(req);
+  const org = await Organisation.findById(orgId).select('lastImportErrors');
+  if (!org) throw ApiError.notFound();
+
+  const errors = org.lastImportErrors ?? [];
+  let csv = 'Row,Error\n';
+  for (const err of errors) {
+    const cleanErr = err.error.replace(/"/g, '""');
+    csv += `${err.row},"${cleanErr}"\n`;
+  }
+
+  res
+    .type('text/csv')
+    .setHeader('Content-Disposition', 'attachment; filename="employee-import-errors.csv"')
+    .send(csv);
+};
+
+

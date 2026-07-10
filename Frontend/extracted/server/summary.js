@@ -156,13 +156,13 @@ function employeeSummary(user, org) {
     },
     certificate: certifiedAttempt
       ? {
-          name: user.name,
-          pct: certifiedAttempt.pct,
-          date: certifiedAttempt.createdAt,
-          certId: "CERT-" + certifiedAttempt.createdAt.slice(0, 4) + "-" + certifiedAttempt.id.slice(-6).toUpperCase(),
-          auditLogRef: certifiedAttempt.evidence.auditLogRef,
-          orgName: org ? org.name : "",
-        }
+        name: user.name,
+        pct: certifiedAttempt.pct,
+        date: certifiedAttempt.createdAt,
+        certId: "CERT-" + certifiedAttempt.createdAt.slice(0, 4) + "-" + certifiedAttempt.id.slice(-6).toUpperCase(),
+        auditLogRef: certifiedAttempt.evidence.auditLogRef,
+        orgName: org ? org.name : "",
+      }
       : null,
     history: mine
       .slice()

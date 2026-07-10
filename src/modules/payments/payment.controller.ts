@@ -177,6 +177,10 @@ export const verifyPayment: RequestHandler = async (req, res) => {
 };
 
 export const mockActivate: RequestHandler = async (req, res) => {
+  // Never available in production — endpoint is entirely hidden to prevent payment bypass.
+  if (env.NODE_ENV === 'production') {
+    throw ApiError.notFound();
+  }
   const orgId = authOrgId(req);
   await Organisation.updateOne({ _id: orgId }, { $set: { seatsActive: true } });
   await logAudit('payment.seats_activated', 'Organisation', orgId, undefined, {
