@@ -212,6 +212,7 @@ export const setTrustScore: RequestHandler = async (req, res) => {
   res.json({ success: true, data: { trustScore: req.body.trustScore } });
 };
 
+
 export const uploadCertificate: RequestHandler = async (req, res) => {
   const { id } = req.params;
   const { filename, base64Data } = req.body as { filename: string; base64Data: string };
@@ -240,4 +241,37 @@ export const uploadCertificate: RequestHandler = async (req, res) => {
       filename: org.compliance.customCertificateFilename,
     },
   });
+};
+
+// Super admin: download the compliance certificate attached to an organisation
+export const downloadOrgCertificate: RequestHandler = async (req, res) => {
+  const org = await Organisation.findById(req.params.id);
+  if (!org) throw ApiError.notFound();
+
+  if (!org.compliance.customCertificateData || !org.compliance.customCertificateFilename) {
+    throw ApiError.notFound('No certificate uploaded for this organisation');
+  }
+
+  const fileBuffer = Buffer.from(org.compliance.customCertificateData, 'base64');
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${org.compliance.customCertificateFilename}"`,
+  );
+  res.send(fileBuffer);
+};
+
+// Super admin: download a specific evidence document by org id + document index
+export const downloadOrgAuditDocument: RequestHandler = async (req, res) => {
+  const audit = await Audit.findOne({ orgId: req.params.id }).sort({ createdAt: -1 });
+  if (!audit) throw ApiError.notFound('No audit found for this organisation');
+
+  const index = parseInt(req.params.docIndex as string, 10);
+  const doc = audit.documents[index];
+  if (!doc || !doc.base64Data) throw ApiError.notFound('Document not found');
+
+  const fileBuffer = Buffer.from(doc.base64Data, 'base64');
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+  res.send(fileBuffer);
 };

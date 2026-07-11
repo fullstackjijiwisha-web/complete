@@ -99,7 +99,7 @@
     document.getElementById("q-field-id").value = q ? q._id : "";
     document.getElementById("q-modal-title").textContent = q ? "Edit Question" : "Add New Question";
     document.getElementById("q-field-type").value = q ? q.type : "mcq";
-    document.getElementById("q-field-type").disabled = !!q; // type cannot be changed
+    document.getElementById("q-field-type").disabled = !!q;
     document.getElementById("q-field-ref").value = q ? q.actReference || "" : "";
     document.getElementById("q-field-diff").value = q ? q.difficulty || "medium" : "medium";
     document.getElementById("q-field-body").value = q ? q.body : "";
@@ -113,7 +113,6 @@
       if (q.options) q.options.forEach(o => addOptionRow(o.text, o.weight));
       if (q.blanks) q.blanks.forEach(b => addBlankRow(b.acceptedAnswers));
     } else {
-      // Defaults
       addOptionRow("", 1);
       addOptionRow("", 0);
     }
@@ -207,7 +206,7 @@
   }
 
 
-  /* ---------------- Organisations & Custom Cert Upload ---------------- */
+  /* ---------------- Organisations Tab ---------------- */
   async function loadOrgs() {
     const container = document.getElementById("orgs-container");
     container.innerHTML = '<p class="small muted">Loading organisations...</p>';
@@ -228,77 +227,126 @@
     }
     container.innerHTML = orgs.map(org => {
       const seatBtnText = org.seatsActive ? "Deactivate Seats" : "Activate Seats";
-      const seatBadge = org.seatsActive ? '<span class="badge badge-good">Active</span>' : '<span class="badge badge-warning">Pending Payment</span>';
-      
+      const seatBadge = org.seatsActive
+        ? '<span class="badge badge-good">Active</span>'
+        : '<span class="badge badge-warning">Pending Payment</span>';
+
+      const complianceStatus = org.compliance.status;
+
+      // ── Evidence documents list ──
       let evidencePackHtml = "";
       if (org.currentAudit && org.currentAudit.documents.length) {
-        evidencePackHtml = '<div class="mt-2" style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:10px;">' +
+        const docItems = org.currentAudit.documents.map((d, index) => {
+          // Use the admin-scoped download route: /admin/orgs/:id/documents/:index
+          // This does not require knowing the audit id — super admin looks it up by org.
+          return `<li>
+            <a href="#"
+               onclick="PC.downloadFile('/admin/orgs/${org._id}/documents/${index}', '${PC.esc(d.name)}'); return false;"
+               style="font-weight:600; color:var(--green-700); text-decoration:none">
+              ⬇ ${PC.esc(d.name)}
+            </a>
+            <span class="muted" style="font-size:0.75rem">(${new Date(d.uploadedAt).toLocaleDateString()})</span>
+          </li>`;
+        }).join("");
+
+        evidencePackHtml =
+          '<div class="mt-2" style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:10px;">' +
           '<h4 class="small" style="margin:0; font-weight:700; color:var(--green-900)">📁 Evidence Pack Documents:</h4>' +
-          '<ul style="margin:6px 0 0; padding-left:20px; font-size:0.85rem; display:flex; flex-direction:column; gap:4px; list-style-type:disc">' +
-          org.currentAudit.documents.map((d, index) => `<li><a href="#" onclick="PC.downloadFile('/audits/${org.currentAudit.id}/documents/${index}', '${PC.esc(d.name)}'); return false;" style="font-weight:600; color:var(--green-700); text-decoration:none">⬇ ${PC.esc(d.name)}</a> <span class="muted" style="font-size:0.75rem">(${new Date(d.uploadedAt).toLocaleDateString()})</span></li>`).join("") +
-          '</ul></div>';
-      } else if (org.compliance.status !== "not_started") {
+          `<ul style="margin:6px 0 0; padding-left:20px; font-size:0.85rem; display:flex; flex-direction:column; gap:4px; list-style-type:disc">${docItems}</ul>` +
+          '</div>';
+      } else if (complianceStatus !== "not_started") {
         evidencePackHtml = '<p class="small muted mt-1"><em>No evidence files uploaded yet.</em></p>';
       }
 
-      // Review panel for active compliance audits
+      // ── Review panel — only shown when audit is pending (requested / scheduled / in_review) ──
       let reviewPanelHtml = "";
-      const pendingAudit = org.currentAudit && ['requested', 'scheduled', 'in_review'].includes(org.compliance.status);
-      if (pendingAudit) {
+      const isPendingReview = org.currentAudit &&
+        ['requested', 'scheduled', 'in_review'].includes(complianceStatus);
+
+      if (isPendingReview) {
+        const auditId = org.currentAudit.id;
+        const orgId = org._id;
+
         reviewPanelHtml = `
-          <div class="mt-2" style="border: 1px dashed var(--orange-700); border-radius:6px; padding:12px; background:#fffbfb;" id="review-panel-${org._id}">
-            <h4 class="small" style="margin:0; font-weight:700; color:var(--orange-700)">🛡️ Compliance Audit Verification Panel</h4>
-            
-            <div class="field mt-1" style="margin-bottom:8px">
-              <label class="small">Findings / Remarks (will be emailed and shown to HR)</label>
-              <textarea id="findings-${org._id}" rows="2" style="width:100%; font-size:0.85rem" placeholder="e.g. Please sign the IC resolution page before resubmitting."></textarea>
+          <div class="mt-2" style="border:1px dashed var(--orange-700); border-radius:6px; padding:12px; background:#fffbfb;" id="review-panel-${orgId}">
+            <h4 class="small" style="margin:0 0 8px; font-weight:700; color:var(--orange-700)">🛡️ Compliance Audit Verification Panel</h4>
+
+            <div class="field" style="margin-bottom:10px">
+              <label class="small" style="font-weight:600">Findings / Remarks <span class="muted">(will be emailed to HR and shown on their dashboard)</span></label>
+              <textarea id="findings-${orgId}" rows="3" style="width:100%; font-size:0.85rem; margin-top:4px; box-sizing:border-box;"
+                placeholder="e.g. Please sign the IC resolution page and resubmit. The POSH policy document is missing the effective date."></textarea>
             </div>
-            
-            <!-- Step 1: Decision Choices -->
-            <div class="flex" id="review-step1-${org._id}" style="gap:8px; flex-wrap:wrap">
-              <button class="btn btn-sm btn-orange" onclick="PC.showUploadCertStep('${org._id}')">✓ Approve Evidence</button>
-              <button class="btn btn-sm btn-ghost" onclick="PC.handleAuditDecision(null, '${org.currentAudit.id}', 'changes_requested', '${org._id}')" style="color:var(--orange-700)">⚠️ Decline & Request Changes</button>
+
+            <!-- Step 1: Decision buttons -->
+            <div class="flex" id="review-step1-${orgId}" style="gap:8px; flex-wrap:wrap; align-items:center">
+              <button class="btn btn-sm btn-orange" onclick="PC.showUploadCertStep('${orgId}')">✓ Approve Evidence</button>
+              <button class="btn btn-sm btn-ghost" onclick="PC.handleDecline('${auditId}', '${orgId}')" style="color:var(--orange-700); border-color:var(--orange-700)">⚠️ Decline & Request Changes</button>
             </div>
-            
-            <!-- Step 2: Upload Cert (hidden by default) -->
-            <div id="review-step2-${org._id}" style="display:none; margin-top:10px; border-top:1px solid var(--line); padding-top:10px;">
-              <p class="small text-green" style="margin:0 0 8px; font-weight:600">✓ Evidence Approved! Please upload the compliance certificate to complete approval:</p>
-              <div class="flex" style="gap:8px; align-items:center;">
-                <label class="btn btn-sm btn-green" style="cursor:pointer; margin:0">
-                  📁 Choose Certificate File (PDF/Image)
-                  <input type="file" accept="application/pdf,image/*" style="display:none" onchange="PC.handleAuditDecision(event, '${org.currentAudit.id}', 'passed', '${org._id}')">
+
+            <!-- Step 2: Upload compliance cert (shown after clicking Approve) -->
+            <div id="review-step2-${orgId}" style="display:none; margin-top:12px; border-top:1px solid var(--line); padding-top:12px;">
+              <p class="small" style="margin:0 0 8px; font-weight:600; color:#0e7a3d">✓ Evidence approved! Now upload the compliance certificate to complete:</p>
+              <div class="flex" style="gap:8px; align-items:center; flex-wrap:wrap">
+                <label class="btn btn-sm btn-green" style="cursor:pointer; margin:0" id="cert-label-${orgId}">
+                  📄 Choose Certificate (PDF / Image)
+                  <input type="file" accept="application/pdf,image/*" style="display:none"
+                    onchange="PC.handleApproveWithCert(event, '${auditId}', '${orgId}')">
                 </label>
-                <button class="btn btn-sm btn-ghost btn-danger" onclick="PC.hideUploadCertStep('${org._id}')">Cancel</button>
+                <span id="cert-file-name-${orgId}" class="small muted">No file chosen</span>
+                <button class="btn btn-sm btn-ghost" onclick="PC.hideUploadCertStep('${orgId}')" style="margin-left:auto">Cancel</button>
               </div>
             </div>
           </div>
         `;
       }
 
-      const attachedCertLink = org.compliance.customCertificateFilename
-        ? `<p class="small text-green mt-1">✓ Attached Cert: <a href="#" onclick="PC.downloadCustomCertLocal('${PC.esc(org.compliance.customCertificateFilename)}', '${org.compliance.customCertificateData}'); return false;" style="font-weight:600">${PC.esc(org.compliance.customCertificateFilename)}</a></p>`
-        : "";
+      // ── Attached compliance certificate download link ──
+      let attachedCertLink = "";
+      if (org.compliance.customCertificateFilename) {
+        // Use a server-side download route for the cert — avoids embedding large base64 in DOM
+        attachedCertLink = `<p class="small mt-1" style="color:#0e7a3d; font-weight:600">
+          ✓ Compliance Cert:
+          <a href="#"
+             onclick="PC.downloadFile('/admin/orgs/${org._id}/certificate', '${PC.esc(org.compliance.customCertificateFilename)}'); return false;"
+             style="color:#0e7a3d">
+            ${PC.esc(org.compliance.customCertificateFilename)}
+          </a>
+          ${org.compliance.validTill ? `<span class="muted">(valid till ${new Date(org.compliance.validTill).toLocaleDateString('en-IN')})</span>` : ""}
+        </p>`;
+      }
+
+      // ── Status badge ──
+      const statusColors = {
+        not_started: "#aaa",
+        requested: "#d97706",
+        scheduled: "#2563eb",
+        in_review: "#7c3aed",
+        changes_requested: "#dc2626",
+        passed: "#059669",
+        failed: "#dc2626",
+        certificate_issued: "#059669"
+      };
+      const statusColor = statusColors[complianceStatus] || "#aaa";
+      const statusBadge = `<span style="display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.78rem; font-weight:700; background:${statusColor}1a; color:${statusColor}; border:1px solid ${statusColor}40">${complianceStatus.replace(/_/g, " ").toUpperCase()}</span>`;
 
       return `
-        <div class="card" style="padding:16px;">
-          <div class="flex spread" style="flex-wrap:wrap; gap:10px;">
+        <div class="card" style="padding:16px; border-left:3px solid ${statusColor}40">
+          <div class="flex spread" style="flex-wrap:wrap; gap:10px; align-items:flex-start">
             <div style="flex:1; min-width:280px;">
-              <h3 class="h-sm" style="margin:0">${PC.esc(org.name)} <span class="mono small muted">(${org.orgCode})</span></h3>
-              <p class="small muted mt-1">Headcount: ${org.headcount} · Seats: ${seatBadge} · Compliance: <span class="badge">${org.compliance.status.replace(/_/g, " ")}</span></p>
+              <div class="flex" style="align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:4px">
+                <h3 class="h-sm" style="margin:0">${PC.esc(org.name)} <span class="mono small muted">(${org.orgCode})</span></h3>
+                ${statusBadge}
+              </div>
+              <p class="small muted" style="margin:2px 0 6px">
+                Headcount: ${org.headcount} &nbsp;·&nbsp; Seats: ${seatBadge}
+                ${org.registeredEmail ? `&nbsp;·&nbsp; HR Email: <strong>${PC.esc(org.registeredEmail)}</strong>` : ""}
+              </p>
               ${attachedCertLink}
               ${evidencePackHtml}
               ${reviewPanelHtml}
             </div>
-            <div class="flex" style="gap:8px; align-items:center;">
+            <div class="flex" style="gap:8px; align-items:center; flex-shrink:0">
               <button class="btn btn-ghost btn-sm" onclick="PC.toggleOrgSeats('${org._id}', ${org.seatsActive})">${seatBtnText}</button>
-              
-              <!-- File Upload Form -->
-              <div style="border-left: 1px solid var(--line); padding-left: 10px;">
-                <label class="btn btn-sm btn-ghost" style="cursor:pointer; margin:0">
-                  📁 Upload Custom Cert
-                  <input type="file" accept="application/pdf" style="display:none" onchange="PC.handleCustomCertUpload(event, '${org._id}')">
-                </label>
-              </div>
             </div>
           </div>
         </div>
@@ -306,7 +354,10 @@
     }).join("");
   }
 
+  /* ---------------- PC API handlers (attached to window.PC) ---------------- */
+
   window.PC = window.PC || {};
+
   PC.toggleOrgSeats = async function (id, currentVal) {
     try {
       await PC.api(`/admin/orgs/${id}`, { method: "PATCH", body: { seatsActive: !currentVal } });
@@ -316,82 +367,9 @@
     }
   };
 
-  PC.handleCustomCertUpload = function (event, orgId) {
-    const file = event.target.files[0];
-    if (!file) return;
-    if (file.type !== "application/pdf") {
-      alert("Please upload a valid PDF document.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async function () {
-      const base64Data = reader.result.split(",")[1];
-      try {
-        await PC.api(`/admin/orgs/${orgId}/upload-certificate`, {
-          method: "POST",
-          body: { filename: file.name, base64Data: base64Data }
-        });
-        alert(`✓ Successfully uploaded compliance certificate: ${file.name}`);
-        loadOrgs();
-      } catch (ex) {
-        alert("Upload failed: " + ex.message);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  PC.handleAuditDecision = async function (event, auditId, decision, orgId) {
-    const findingsEl = document.getElementById(`findings-${orgId}`);
-    const findings = findingsEl ? findingsEl.value.trim() : "";
-
-    if (decision === "changes_requested" && !findings) {
-      alert("Please provide findings/remarks explaining why the evidence pack is declined.");
-      return;
-    }
-
-    if (decision === "passed") {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = async function () {
-        const base64Data = reader.result.split(",")[1];
-        try {
-          await PC.api(`/audits/${auditId}/decision`, {
-            method: "POST",
-            body: {
-              decision: "passed",
-              findings: findings,
-              filename: file.name,
-              base64Data: base64Data
-            }
-          });
-          alert(`✓ Audit Approved & Compliance Certificate sent to Organisation.`);
-          loadOrgs();
-        } catch (ex) {
-          alert("Approval failed: " + ex.message);
-        }
-      };
-      reader.readAsDataURL(file);
-    } else {
-      if (!confirm("Are you sure you want to decline this evidence pack and request changes?")) return;
-      try {
-        await PC.api(`/audits/${auditId}/decision`, {
-          method: "POST",
-          body: {
-            decision: "changes_requested",
-            findings: findings
-          }
-        });
-        alert("⚠️ Audit declined. Changes request sent to the organisation.");
-        loadOrgs();
-      } catch (ex) {
-        alert("Decline failed: " + ex.message);
-      }
-    }
-  };
-
+  /**
+   * Step 1 → Step 2: hide the Approve/Decline buttons, show the cert upload area.
+   */
   PC.showUploadCertStep = function (orgId) {
     const step1 = document.getElementById(`review-step1-${orgId}`);
     const step2 = document.getElementById(`review-step2-${orgId}`);
@@ -399,6 +377,9 @@
     if (step2) step2.style.display = "block";
   };
 
+  /**
+   * Cancel cert upload — go back to Step 1.
+   */
   PC.hideUploadCertStep = function (orgId) {
     const step1 = document.getElementById(`review-step1-${orgId}`);
     const step2 = document.getElementById(`review-step2-${orgId}`);
@@ -406,28 +387,107 @@
     if (step2) step2.style.display = "none";
   };
 
+  /**
+   * Handle APPROVE: triggered by the file input onchange after cert is chosen.
+   * Reads the cert file, sends to /audits/:auditId/decision with decision=passed.
+   * The backend creates the ComplianceCertificate record, saves the cert data on
+   * the org, and sends the acceptance email with the cert attached.
+   */
+  PC.handleApproveWithCert = async function (event, auditId, orgId) {
+    const file = event.target.files[0];
+    const fileNameEl = document.getElementById(`cert-file-name-${orgId}`);
 
-  PC.downloadCustomCertLocal = function (filename, base64Data) {
-    if (!base64Data) {
-      alert("No certificate data payload found.");
+    if (!file) {
+      if (fileNameEl) fileNameEl.textContent = "No file chosen";
       return;
     }
-    try {
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+
+    if (fileNameEl) fileNameEl.textContent = file.name;
+
+    const findings = (document.getElementById(`findings-${orgId}`) || {}).value || "";
+
+    const label = document.getElementById(`cert-label-${orgId}`);
+    if (label) { label.style.opacity = "0.6"; label.style.pointerEvents = "none"; }
+
+    const reader = new FileReader();
+    reader.onload = async function () {
+      const base64Data = reader.result.split(",")[1];
+      try {
+        await PC.api(`/audits/${auditId}/decision`, {
+          method: "POST",
+          body: {
+            decision: "passed",
+            findings: findings,
+            filename: file.name,
+            base64Data: base64Data
+          }
+        });
+        alert(`✓ Evidence approved & compliance certificate sent to the organisation!`);
+        loadOrgs();
+      } catch (ex) {
+        alert("Approval failed: " + ex.message);
+        if (label) { label.style.opacity = ""; label.style.pointerEvents = ""; }
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: "application/octet-stream" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = filename || "compliance_certificate";
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } catch (e) {
-      alert("Failed to decode and download certificate: " + e.message);
+    };
+    reader.onerror = function () {
+      alert("Failed to read the certificate file. Please try again.");
+      if (label) { label.style.opacity = ""; label.style.pointerEvents = ""; }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  /**
+   * Handle DECLINE: validates that findings are provided, confirms, then POSTs
+   * to /audits/:auditId/decision with decision=changes_requested.
+   * Backend saves findings on audit, updates org status, sends decline email.
+   */
+  PC.handleDecline = async function (auditId, orgId) {
+    const findingsEl = document.getElementById(`findings-${orgId}`);
+    const findings = findingsEl ? findingsEl.value.trim() : "";
+
+    if (!findings) {
+      // Highlight the textarea
+      if (findingsEl) {
+        findingsEl.style.borderColor = "var(--orange-700)";
+        findingsEl.focus();
+        findingsEl.placeholder = "⚠️ Findings are required before declining.";
+        setTimeout(() => {
+          if (findingsEl) { findingsEl.style.borderColor = ""; findingsEl.placeholder = ""; }
+        }, 3000);
+      }
+      alert("Please enter findings / remarks explaining why the evidence pack is being declined. These will be emailed to the organisation's HR.");
+      return;
     }
+
+    if (!confirm(`Decline this evidence pack?\n\nFindings to be sent:\n"${findings}"\n\nThis will email the organisation's HR with the above remarks.`)) {
+      return;
+    }
+
+    const declineBtn = document.querySelector(`#review-step1-${orgId} .btn-ghost`);
+    if (declineBtn) { declineBtn.disabled = true; declineBtn.textContent = "Sending..."; }
+
+    try {
+      await PC.api(`/audits/${auditId}/decision`, {
+        method: "POST",
+        body: {
+          decision: "changes_requested",
+          findings: findings
+        }
+      });
+      alert("⚠️ Audit declined. Findings emailed to the organisation's HR.");
+      loadOrgs();
+    } catch (ex) {
+      alert("Decline failed: " + ex.message);
+      if (declineBtn) { declineBtn.disabled = false; declineBtn.textContent = "⚠️ Decline & Request Changes"; }
+    }
+  };
+
+  /**
+   * Download the compliance certificate for an org via the admin API.
+   * Uses PC.downloadFile which attaches the Bearer token automatically.
+   */
+  PC.downloadOrgCert = function (orgId, filename) {
+    PC.downloadFile(`/admin/orgs/${orgId}/certificate`, filename);
   };
 
 })();

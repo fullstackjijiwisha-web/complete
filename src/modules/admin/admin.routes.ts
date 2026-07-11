@@ -94,3 +94,9 @@ adminRoutes.post(
   ),
   controller.uploadCertificate,
 );
+
+// Download the compliance certificate for a specific organisation
+adminRoutes.get('/orgs/:id/certificate', controller.downloadOrgCertificate);
+
+// Download an evidence document uploaded by an organisation (by org id + doc index)
+adminRoutes.get('/orgs/:id/documents/:docIndex', controller.downloadOrgAuditDocument);

@@ -154,8 +154,17 @@
           "<span><strong>" + PC.esc(d.name) + "</strong><br><span class='small muted'>" + fmtDateTime(d.uploadedAt) + "</span></span>" +
           `<span class="ref"><a class="badge badge-good" href="#" onclick="PC.downloadFile('/audits/${audit._id || audit.id}/documents/${i}', '${PC.esc(d.name)}'); return false;">✓ download</a></span></li>`;
       });
+      let declineNote = "";
+      if (audit.status === "changes_requested" && audit.findings) {
+        declineNote = '<div style="margin-top:10px; padding:12px; background:#fffbfb; border:1px dashed var(--orange-700); border-radius:6px;">' +
+          '<h4 class="small" style="color:var(--orange-700); font-weight:700; margin:0 0 4px;">⚠️ Evidence Pack Declined (Changes Requested)</h4>' +
+          '<p class="small" style="margin:0; font-weight:500;">' + PC.esc(audit.findings) + '</p>' +
+          '</div>';
+      }
+
       body =
         '<p class="small muted">Register and upload each required POSH compliance record. Each uploaded file is securely saved in the evidence pack.</p>' +
+        declineNote +
         (rows ? '<ul class="doc-list mt-2">' + rows + "</ul>" : '<p class="small muted mt-2">No documents registered yet.</p>') +
         (status !== "locked"
           ? '<form class="flex mt-2" id="doc-form" style="flex-wrap:wrap;gap:10px;align-items:center">' +
@@ -212,11 +221,14 @@
     if (!audit) {
       body = '<p class="small muted">Unlocks after booking. Compiles the booking record, document registry, checklist state, readiness snapshot and per-employee certification list (name + status + score band only) into one export.</p>';
     } else {
-      body =
-        '<p class="small muted">The compiled evidence pack (including readiness snapshot, document registry, and certifications) has been successfully submitted to Jijiwisha Society for verification.</p>';
+      if (audit.status === "changes_requested") {
+        body = '<p class="small muted">The evidence pack was reviewed by Jijiwisha Society and changes were requested. Please update your documents in Stage 2.</p>';
+      } else {
+        body = '<p class="small muted">The compiled evidence pack (including readiness snapshot, document registry, and certifications) has been successfully submitted to Jijiwisha Society for verification.</p>';
+      }
     }
     return shell(4, status, "Evidence Pack",
-      audit ? '<span class="badge badge-good">Submitted</span>' : '<span class="badge badge-neutral">Automatic compilation</span>', body);
+      audit ? (audit.status === "changes_requested" ? '<span class="badge badge-serious">Changes Requested</span>' : '<span class="badge badge-good">Submitted</span>') : '<span class="badge badge-neutral">Automatic compilation</span>', body);
   }
 
   /* ── Stage 5: decision / compliance certificate ── */
