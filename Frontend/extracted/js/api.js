@@ -270,158 +270,39 @@
 
   /* ---------------- payment flow (Razorpay orders + webhook) ---------------- */
   PC.startPayment = async function (onPaid) {
-    // Show our custom payment picker — Card/Netbanking opens Razorpay Standard
-    // Checkout; UPI QR generates a real Razorpay QR via our backend.
-    showPaymentPicker(onPaid);
+    let order;
+    try {
+      order = await PC.api("/payments/orders", { body: { type: "seats" } });
+    } catch (e) {
+      if (e.code === "PAYMENTS_NOT_CONFIGURED") return showPaymentsNotConfigured(onPaid);
+      return alertModal("Payment failed", escapeH(e.message));
+    }
+    try {
+      await loadScript("https://checkout.razorpay.com/v1/checkout.js");
+    } catch (e) {
+      return alertModal("Payment failed", "Could not load the Razorpay checkout script.");
+    }
+    const me = await PC.me();
+    const rzp = new window.Razorpay({
+      key: order.keyId,
+      order_id: order.orderId,
+      amount: order.amountPaise,
+      currency: order.currency,
+      name: "POSH Compass",
+      description: (me && me.org ? me.org.name + " · " : "") + "assessment seats",
+      theme: { color: "#0e3626" },
+      handler: function (response) { verifyRazorpayPayment(response, onPaid); },
+      modal: {
+        ondismiss: function () { /* user cancelled — nothing to do */ },
+      },
+    });
+    rzp.on("payment.failed", function (resp) {
+      const desc = resp && resp.error && resp.error.description;
+      alertModal("Payment failed", escapeH(desc || "The payment could not be completed. Please try again."));
+    });
+    rzp.open();
   };
 
-  function showPaymentPicker(onPaid) {
-    const m = document.createElement("div");
-    m.className = "modal-overlay open";
-    m.id = "pay-picker-overlay";
-
-    m.innerHTML =
-      '<div class="modal" style="max-width:420px">' +
-        '<button class="close" id="pay-picker-close" aria-label="Close">✕</button>' +
-        '<h2 style="font-size:1.15rem;margin-bottom:4px">Complete Payment</h2>' +
-        '<p class="small muted mb-2" id="pay-picker-sub">Choose your preferred payment method.</p>' +
-        '<div class="sim-pay-tabs" style="margin-bottom:16px">' +
-          '<div class="sim-pay-tab-btn active" id="pp-tab-card">💳 Card / Netbanking</div>' +
-          '<div class="sim-pay-tab-btn" id="pp-tab-upi">📱 UPI QR Code</div>' +
-        '</div>' +
-        // Card panel
-        '<div id="pp-card-panel">' +
-          '<p class="small muted" style="margin-bottom:14px">Opens Razorpay\'s secure checkout — supports cards, netbanking, and wallets.</p>' +
-          '<button class="btn btn-orange" id="pp-btn-razorpay" style="width:100%;justify-content:center;padding:12px;font-size:1rem;font-weight:600">🔒 Open Razorpay Checkout</button>' +
-        '</div>' +
-        // UPI QR panel
-        '<div id="pp-upi-panel" class="hidden" style="text-align:center">' +
-          '<div id="pp-qr-loading" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 0">' +
-            '<div style="width:36px;height:36px;border:3px solid #dbeae2;border-top-color:var(--green-800);border-radius:50%;animation:spin 0.8s linear infinite"></div>' +
-            '<p class="small muted">Generating Razorpay QR…</p>' +
-          '</div>' +
-          '<div id="pp-qr-ready" class="hidden">' +
-            '<img id="pp-qr-img" src="" alt="UPI QR Code" style="width:200px;height:200px;border:2px solid #dbeae2;border-radius:10px;margin:0 auto;display:block">' +
-            '<p class="small" style="margin-top:8px;font-weight:600;color:var(--green-800)" id="pp-qr-amount"></p>' +
-            '<p class="small muted" style="font-size:0.75rem;margin-top:4px">Scan with BHIM, GPay, PhonePe, or Paytm</p>' +
-            '<p class="small muted" style="font-size:0.72rem;margin-top:6px" id="pp-qr-status">Waiting for payment…</p>' +
-          '</div>' +
-          '<div id="pp-qr-error" class="hidden" style="padding:20px 0;color:var(--orange-700);font-size:0.85rem">' +
-            '⚠️ Could not generate QR. Please use card payment.' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-
-    document.body.appendChild(m);
-
-    var qrId = null;
-    var pollTimer = null;
-
-    function clearPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-
-    m.querySelector("#pay-picker-close").addEventListener("click", function () {
-      clearPoll(); m.remove();
-    });
-
-    // Tab switching
-    var tabCard = m.querySelector("#pp-tab-card");
-    var tabUpi = m.querySelector("#pp-tab-upi");
-    var cardPanel = m.querySelector("#pp-card-panel");
-    var upiPanel = m.querySelector("#pp-upi-panel");
-
-    tabCard.addEventListener("click", function () {
-      tabCard.classList.add("active"); tabUpi.classList.remove("active");
-      cardPanel.classList.remove("hidden"); upiPanel.classList.add("hidden");
-      clearPoll();
-    });
-
-    tabUpi.addEventListener("click", async function () {
-      tabUpi.classList.add("active"); tabCard.classList.remove("active");
-      upiPanel.classList.remove("hidden"); cardPanel.classList.add("hidden");
-
-      if (qrId) return; // already generated
-
-      var qrLoading = m.querySelector("#pp-qr-loading");
-      var qrReady = m.querySelector("#pp-qr-ready");
-      var qrError = m.querySelector("#pp-qr-error");
-      var qrImg = m.querySelector("#pp-qr-img");
-      var qrAmount = m.querySelector("#pp-qr-amount");
-      var qrStatus = m.querySelector("#pp-qr-status");
-
-      qrLoading.style.display = "flex";
-      qrReady.classList.add("hidden");
-      qrError.classList.add("hidden");
-
-      try {
-        var qrData = await PC.api("/payments/qr-code", { method: "POST", body: {} });
-        qrId = qrData.qrId;
-        qrImg.src = qrData.imageUrl;
-        qrAmount.textContent = "Amount: ₹" + (qrData.amountPaise / 100).toLocaleString("en-IN");
-        qrLoading.style.display = "none";
-        qrReady.classList.remove("hidden");
-
-        // Poll every 5s for payment confirmation
-        pollTimer = setInterval(async function () {
-          try {
-            var res = await PC.api("/payments/qr-code/" + qrId + "/status");
-            if (res.paid) {
-              clearPoll();
-              m.remove();
-              alertModal("✓ Payment received via UPI",
-                "QR scan payment verified — your assessment seats are now activated!",
-                [{ label: "Open Dashboard", href: "dashboard.html" }]);
-              if (onPaid) onPaid();
-            } else {
-              qrStatus.textContent = "Waiting for payment… (" + new Date().toLocaleTimeString() + ")";
-            }
-          } catch (e) { /* silent */ }
-        }, 5000);
-      } catch (e) {
-        qrLoading.style.display = "none";
-        qrError.classList.remove("hidden");
-      }
-    });
-
-    // Card/Netbanking — opens real Razorpay Standard Checkout
-    m.querySelector("#pp-btn-razorpay").addEventListener("click", async function () {
-      var btn = m.querySelector("#pp-btn-razorpay");
-      btn.disabled = true;
-      btn.textContent = "Loading checkout…";
-      try {
-        var order = await PC.api("/payments/orders", { body: { type: "seats" } });
-        await loadScript("https://checkout.razorpay.com/v1/checkout.js");
-        var me = await PC.me();
-        var rzp = new window.Razorpay({
-          key: order.keyId,
-          order_id: order.orderId,
-          amount: order.amountPaise,
-          currency: order.currency,
-          name: "POSH Compass",
-          description: (me && me.org ? me.org.name + " · " : "") + "assessment seats",
-          theme: { color: "#0e3626" },
-          handler: function (response) {
-            m.remove();
-            verifyRazorpayPayment(response, onPaid);
-          },
-          modal: { ondismiss: function () { btn.disabled = false; btn.textContent = "🔒 Open Razorpay Checkout"; } },
-        });
-        rzp.on("payment.failed", function (resp) {
-          var desc = resp && resp.error && resp.error.description;
-          alertModal("Payment failed", escapeH(desc || "The payment could not be completed. Please try again."));
-          btn.disabled = false; btn.textContent = "🔒 Open Razorpay Checkout";
-        });
-        rzp.open();
-      } catch (e) {
-        if (e && e.code === "PAYMENTS_NOT_CONFIGURED") {
-          m.remove();
-          showPaymentsNotConfigured(onPaid);
-        } else {
-          alertModal("Payment failed", escapeH(e.message));
-          btn.disabled = false; btn.textContent = "🔒 Open Razorpay Checkout";
-        }
-      }
-    });
-  }
 
   /* Standard Checkout verification: send the three fields to the server, which
      recomputes the signature. Seats flip only if the signature is valid. */

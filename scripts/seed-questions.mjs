@@ -657,8 +657,8 @@ async function seed() {
   }
 
   let mongod = null;
-  const isDev = process.env.NODE_ENV !== 'production' || uri.includes('localhost') || uri.includes('127.0.0.1');
-  if (isDev && !process.env.VERCEL) {
+  const isDev = uri.includes('localhost') || uri.includes('127.0.0.1');
+  if (isDev) {
     try {
       console.log('Starting in-memory MongoDB server with persistent storage...');
       const { MongoMemoryServer } = await import('mongodb-memory-server');
