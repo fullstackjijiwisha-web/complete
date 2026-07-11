@@ -739,6 +739,12 @@
   };
 
   PC.viewFile = async function (path) {
+    const newWindow = window.open('about:blank', '_blank');
+    if (!newWindow) {
+      alertModal("Popup Blocked", "Please allow popups to view this document.");
+      return;
+    }
+    newWindow.document.write("<p style='font-family:sans-serif;padding:20px'>Loading document...</p>");
     try {
       let res = await rawFetch(path);
       if (res.status === 401 && hasSession()) {
@@ -748,9 +754,10 @@
       if (!res.ok) throw new Error("View failed with status " + res.status);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      newWindow.location.href = url;
       setTimeout(() => window.URL.revokeObjectURL(url), 60000); // Revoke after a minute
     } catch (e) {
+      newWindow.close();
       alertModal("View failed", escapeH(e.message));
     }
   };
