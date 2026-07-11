@@ -171,7 +171,7 @@
             '<input name="name" id="doc-upload-name" required placeholder="Document name (e.g. POSH Policy 2026)" style="flex:1.2;min-width:200px">' +
             '<label class="btn btn-ghost" style="cursor:pointer; margin:0">' +
               '📁 Choose File' +
-              '<input type="file" id="doc-upload-file" required style="display:none" onchange="document.getElementById(\'doc-file-label\').textContent = this.files[0] ? this.files[0].name : \'No file chosen\'">' +
+              '<input type="file" id="doc-upload-file" required style="display:none">' +
             '</label>' +
             '<span id="doc-file-label" class="small muted">No file chosen</span>' +
             '<button class="btn btn-green" type="submit">+ Upload document</button></form>' +
@@ -302,6 +302,14 @@
     }
 
     // Stage 2: file upload
+    const fileInput = document.getElementById("doc-upload-file");
+    if (fileInput) {
+      fileInput.addEventListener("change", function () {
+        const label = document.getElementById("doc-file-label");
+        if (label) label.textContent = this.files[0] ? this.files[0].name : "No file chosen";
+      });
+    }
+
     const docForm = document.getElementById("doc-form");
     if (docForm) docForm.addEventListener("submit", function (e) {
       e.preventDefault();
