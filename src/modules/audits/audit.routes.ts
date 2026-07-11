@@ -9,7 +9,6 @@ export const auditRoutes = Router();
 
 auditRoutes.use(requireAuth);
 
-auditRoutes.get('/slots', roleGuard('hr_admin', 'super_admin'), controller.listSlots);
 auditRoutes.get('/current', roleGuard('hr_admin'), controller.getCurrentForOrg);
 auditRoutes.post(
   '/',

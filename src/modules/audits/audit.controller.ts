@@ -13,22 +13,11 @@ import { refreshPublicStats } from '../stats/stats.service';
 import { invalidateDashboardCache } from '../organisations/dashboard.service';
 import { sendEmail } from '../../services/email.service';
 
-export const listSlots: RequestHandler = async (_req, res) => {
-  const slots = await AuditSlot.find({ isBooked: false, startsAt: { $gt: new Date() } })
-    .sort({ startsAt: 1 })
-    .limit(50);
-  res.json({
-    success: true,
-    data: slots.map((s) => ({ id: s.id, startsAt: s.startsAt })),
-  });
-};
-
 // Latest audit for the caller's organisation — lets the HR audit page restore
 // its state without knowing the audit id up front.
 export const getCurrentForOrg: RequestHandler = async (req, res) => {
   const audit = await Audit.findOne({ orgId: new Types.ObjectId(authOrgId(req)) })
-    .sort({ createdAt: -1 })
-    .populate<{ slotId: { startsAt: Date } | null }>('slotId', 'startsAt');
+    .sort({ createdAt: -1 });
   if (!audit) throw ApiError.notFound('No audit booked yet');
   res.json({ success: true, data: audit });
 };
