@@ -88,4 +88,20 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const env = parsed.data;
+const rawData = parsed.data;
+
+// Auto-resolve production Vercel hostnames if environment variables are left at localhost defaults
+if (process.env.VERCEL_URL) {
+  const vercelHost = `https://${process.env.VERCEL_URL}`;
+  if (rawData.CLIENT_URL.includes('localhost')) {
+    rawData.CLIENT_URL = vercelHost;
+  }
+  if (rawData.CORS_ORIGINS.includes('localhost')) {
+    rawData.CORS_ORIGINS = vercelHost;
+  }
+  if (rawData.CERT_VERIFY_BASE_URL.includes('localhost')) {
+    rawData.CERT_VERIFY_BASE_URL = `${vercelHost}/verify`;
+  }
+}
+
+export const env = rawData;

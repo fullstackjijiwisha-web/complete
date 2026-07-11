@@ -112,11 +112,10 @@
     let body;
     if (audit) {
       body =
-        '<p class="small muted">Audit scheduled with Jijiwisha Society. This booking is recorded and referenced in every later stage.</p>' +
+        '<p class="small muted">Audit request submitted to Jijiwisha Society. This booking is recorded and referenced in every later stage.</p>' +
         '<div class="evidence mt-2"><h3>Booking record</h3><div class="rows">' +
         evRow("Audit ID", '<span class="mono">' + PC.esc(audit._id || audit.id) + "</span>") +
-        evRow("Slot", audit.slotId && audit.slotId.startsAt ? fmtDateTime(audit.slotId.startsAt) : "—") +
-        evRow("Booked", fmtDateTime(audit.createdAt)) +
+        evRow("Submitted", fmtDateTime(audit.createdAt)) +
         evRow("Status", '<span class="badge badge-neutral">' + PC.esc(audit.status.replace(/_/g, " ")) + "</span>") +
         evRow("Auditor", "Jijiwisha Society · empanelled") +
         "</div></div>";
@@ -131,20 +130,15 @@
         '<div class="mt-2"><a class="btn btn-ghost btn-sm" href="dashboard.html">Track readiness on the dashboard →</a></div>';
     } else {
       body =
-        '<p class="small muted">Your organisation is POSH Ready — select an audit slot. The scope declaration is a formal undertaking recorded with the booking.</p>' +
-        '<div class="card-grid cols-2 mt-2">' +
-        '<div class="field"><label for="a-slot">Available slots (Jijiwisha Society)</label><select id="a-slot"><option value="">Loading slots…</option></select></div></div>' +
-        '<label class="small" style="display:flex;gap:9px;align-items:flex-start;cursor:pointer">' +
+        '<p class="small muted">Your organisation is POSH Ready — submit your compliance records for verification by Jijiwisha Society. The scope declaration is a formal undertaking recorded with the booking.</p>' +
+        '<label class="small" style="display:flex;gap:9px;align-items:flex-start;cursor:pointer;margin-top:12px">' +
         '<input type="checkbox" id="a-scope" style="margin-top:3px">' +
         "<span>I declare on behalf of the organisation that the records submitted for this audit are complete and accurate, and I consent to verification of the Internal Committee's constitution and process. <em>(recorded with the booking)</em></span></label>" +
-        '<div class="mt-2"><button class="btn btn-orange" id="a-book">Book Audit with Jijiwisha Society</button></div>' +
-        '<div id="a-book-msg" class="small mt-1"></div>';
+        '<div class="mt-2"><button class="btn btn-orange" id="a-book">Submit Audit to Jijiwisha Society</button></div>' +
+        '<div id="a-book-msg" class="small mt-1" style="color:var(--orange-700)"></div>';
     }
-    return shell(1, status, "Book the Audit",
-      audit ? '<span class="badge badge-good">✓ Scheduled</span>'
-        : dash.readiness.auditUnlocked ? '<span class="badge badge-warning">◷ Scheduling open</span>'
-        : '<span class="badge badge-neutral">Locked — needs POSH Ready</span>',
-      body);
+    return shell(1, status, "Request Audit & Compliance Verification",
+      audit ? '<span class="badge badge-good">✓ Requested</span>' : '<span class="badge badge-neutral">POSH Ready required</span>', body);
   }
 
   /* ── Stage 2: documents ── */
@@ -154,26 +148,33 @@
       body = '<p class="small muted">Unlocks after the audit is booked. Required records: POSH policy, IC constitution order, Section 21 annual report, and the platform\'s training/assessment evidence.</p>';
     } else {
       let rows = "";
-      audit.documents.forEach(function (d) {
+      audit.documents.forEach(function (d, i) {
+        const downloadUrl = (d.base64Data || d.url === 'local_upload')
+          ? "/api/v1/audits/" + (audit._id || audit.id) + "/documents/" + i
+          : d.url;
         rows +=
           "<li><span data-icon='doc' data-size='17' data-color='#0e7a3d'></span>" +
           "<span><strong>" + PC.esc(d.name) + "</strong><br><span class='small muted'>" + fmtDateTime(d.uploadedAt) + "</span></span>" +
-          '<span class="ref"><a class="badge badge-good" href="' + PC.esc(d.url) + '" target="_blank" rel="noopener">✓ linked</a></span></li>';
+          '<span class="ref"><a class="badge badge-good" href="' + downloadUrl + '" target="_blank" rel="noopener">✓ download</a></span></li>';
       });
       body =
-        '<p class="small muted">Register each record\'s metadata (name + where it lives). Each entry is timestamped server-side — direct file storage is a pending infrastructure decision, so link documents from your drive/DMS.</p>' +
+        '<p class="small muted">Register and upload each required POSH compliance record. Each uploaded file is securely saved in the evidence pack.</p>' +
         (rows ? '<ul class="doc-list mt-2">' + rows + "</ul>" : '<p class="small muted mt-2">No documents registered yet.</p>') +
         (status !== "locked"
-          ? '<form class="flex mt-2" id="doc-form" style="flex-wrap:wrap;gap:10px">' +
-            '<input name="name" required placeholder="Document name (e.g. POSH Policy 2026)" style="flex:1.2;min-width:200px">' +
-            '<input type="url" name="url" required placeholder="https:// link to the document" style="flex:1.6;min-width:220px">' +
-            '<button class="btn btn-green">+ Register document</button></form>' +
-            '<div id="doc-msg" class="small mt-1"></div>'
+          ? '<form class="flex mt-2" id="doc-form" style="flex-wrap:wrap;gap:10px;align-items:center">' +
+            '<input name="name" id="doc-upload-name" required placeholder="Document name (e.g. POSH Policy 2026)" style="flex:1.2;min-width:200px">' +
+            '<label class="btn btn-ghost" style="cursor:pointer; margin:0">' +
+              '📁 Choose File' +
+              '<input type="file" id="doc-upload-file" required style="display:none" onchange="document.getElementById(\'doc-file-label\').textContent = this.files[0] ? this.files[0].name : \'No file chosen\'">' +
+            '</label>' +
+            '<span id="doc-file-label" class="small muted">No file chosen</span>' +
+            '<button class="btn btn-green" type="submit">+ Upload document</button></form>' +
+            '<div id="doc-msg" class="small mt-1" style="color:var(--orange-700)"></div>'
           : "");
     }
     const n = audit ? audit.documents.length : 0;
     return shell(2, status, "Upload Documentation",
-      n ? '<span class="badge badge-good">✓ ' + n + " registered</span>" : '<span class="badge badge-neutral">Metadata registry</span>',
+      n ? '<span class="badge badge-good">✓ ' + n + " uploaded</span>" : '<span class="badge badge-neutral">Document registry</span>',
       body);
   }
 
@@ -215,12 +216,10 @@
       body = '<p class="small muted">Unlocks after booking. Compiles the booking record, document registry, checklist state, readiness snapshot and per-employee certification list (name + status + score band only) into one export.</p>';
     } else {
       body =
-        '<p class="small muted">One-click export of everything the auditor needs: readiness record, roster certification list (score bands only — never raw responses), document registry and checklist state.</p>' +
-        '<div class="mt-2"><button class="btn btn-green" id="a-pack-dl">⬇ Download Evidence Pack (JSON)</button></div>' +
-        '<div id="pack-msg" class="small mt-1"></div>';
+        '<p class="small muted">The compiled evidence pack (including readiness snapshot, document registry, and certifications) has been successfully submitted to Jijiwisha Society for verification.</p>';
     }
-    return shell(4, status, "Evidence Pack Export",
-      audit ? '<span class="badge badge-good">Available</span>' : '<span class="badge badge-neutral">Automatic compilation</span>', body);
+    return shell(4, status, "Evidence Pack",
+      audit ? '<span class="badge badge-good">Submitted</span>' : '<span class="badge badge-neutral">Automatic compilation</span>', body);
   }
 
   /* ── Stage 5: decision / compliance certificate ── */
@@ -273,30 +272,18 @@
     });
 
     // Stage 1: slots + booking
-    const slotSel = document.getElementById("a-slot");
-    if (slotSel) {
-      PC.api("/audits/slots").then(function (slots) {
-        if (!slots.length) {
-          slotSel.innerHTML = '<option value="">No open slots — contact Jijiwisha Society</option>';
-          return;
-        }
-        slotSel.innerHTML = slots.map(function (s) {
-          return '<option value="' + PC.esc(s.id) + '">' + fmtDateTime(s.startsAt) + "</option>";
-        }).join("");
-      }).catch(function (e) {
-        slotSel.innerHTML = '<option value="">Could not load slots: ' + PC.esc(e.message) + "</option>";
-      });
-
-      document.getElementById("a-book").addEventListener("click", async function () {
+    // Stage 1: slots + booking
+    const bookBtn = document.getElementById("a-book");
+    if (bookBtn) {
+      bookBtn.addEventListener("click", async function () {
         const msg = document.getElementById("a-book-msg");
-        if (!slotSel.value) { msg.textContent = "Select an audit slot."; return; }
         if (!document.getElementById("a-scope").checked) {
           msg.textContent = "The scope declaration must be accepted — it is recorded with the booking.";
           return;
         }
         this.disabled = true;
         try {
-          await PC.api("/audits", { body: { slotId: slotSel.value } });
+          await PC.api("/audits", { method: "POST", body: {} });
           refresh();
         } catch (e) {
           msg.textContent = e.message;
@@ -305,46 +292,44 @@
       });
     }
 
-    // Stage 2: document metadata
+    // Stage 2: file upload
     const docForm = document.getElementById("doc-form");
-    if (docForm) docForm.addEventListener("submit", async function (e) {
+    if (docForm) docForm.addEventListener("submit", function (e) {
       e.preventDefault();
       const msg = document.getElementById("doc-msg");
-      const btn = docForm.querySelector("button");
-      btn.disabled = true;
-      try {
-        await PC.api("/audits/" + (audit._id || audit.id) + "/documents", {
-          body: { name: docForm.name.value, url: docForm.url.value },
-        });
-        refresh();
-      } catch (ex) {
-        msg.textContent = ex.message;
-        btn.disabled = false;
+      const btn = docForm.querySelector("button[type='submit']");
+      const fileInput = document.getElementById("doc-upload-file");
+      const nameInput = document.getElementById("doc-upload-name");
+
+      if (!fileInput || !fileInput.files[0]) {
+        if (msg) msg.textContent = "Please select a file to upload.";
+        return;
       }
+
+      btn.disabled = true;
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+
+      reader.onload = async function () {
+        const base64Data = reader.result.split(",")[1];
+        try {
+          await PC.api("/audits/" + (audit._id || audit.id) + "/documents", {
+            method: "POST",
+            body: { name: nameInput.value, base64Data: base64Data },
+          });
+          refresh();
+        } catch (ex) {
+          if (msg) msg.textContent = ex.message;
+          btn.disabled = false;
+        }
+      };
+      reader.readAsDataURL(file);
     });
 
     // Stage 3: refresh
     const refreshBtn = document.getElementById("a-refresh");
     if (refreshBtn) refreshBtn.addEventListener("click", refresh);
 
-    // Stage 4: pack download
-    const packBtn = document.getElementById("a-pack-dl");
-    if (packBtn) packBtn.addEventListener("click", async function () {
-      packBtn.disabled = true;
-      try {
-        const pack = await PC.api("/audits/" + (audit._id || audit.id) + "/pack");
-        const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "posh-compass-evidence-pack-" + (audit._id || audit.id) + ".json";
-        a.click();
-        URL.revokeObjectURL(a.href);
-      } catch (e) {
-        document.getElementById("pack-msg").textContent = e.message;
-      } finally {
-        packBtn.disabled = false;
-      }
-    });
   }
 
   // The old localStorage demo had a reset button — hide it, state is server-side now.

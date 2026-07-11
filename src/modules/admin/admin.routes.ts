@@ -82,3 +82,15 @@ adminRoutes.patch(
   validate(z.object({ trustScore: z.number().min(0).max(5) })),
   controller.setTrustScore,
 );
+
+// Upload a custom PDF compliance certificate to a specific organisation
+adminRoutes.post(
+  '/orgs/:id/upload-certificate',
+  validate(
+    z.object({
+      filename: z.string().min(1),
+      base64Data: z.string().min(1),
+    }),
+  ),
+  controller.uploadCertificate,
+);

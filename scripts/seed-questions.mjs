@@ -37,6 +37,14 @@ const questionSchema = new mongoose.Schema(
 );
 const Question = mongoose.models.Question || mongoose.model('Question', questionSchema);
 
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  role: { type: String, required: true },
+  passwordHash: { type: String, required: true }
+});
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+
 // ── MCQ Questions (30) ─────────────────────────────────────────────────────
 const MCQ_QUESTIONS = [
   {
@@ -720,6 +728,25 @@ async function seed() {
   console.log('\n── Question Bank Summary ──────────────────');
   counts.forEach((c) => console.log(`  ${c._id}: ${c.count}`));
   console.log(`\n✅ Created: ${created} | Skipped (already exist): ${skipped}`);
+
+  // Create Super Admin if configured in .env
+  if (process.env.SUPER_ADMIN_EMAIL && process.env.SUPER_ADMIN_PASSWORD) {
+    const email = process.env.SUPER_ADMIN_EMAIL.toLowerCase();
+    const existingAdmin = await User.findOne({ email });
+    if (!existingAdmin) {
+      const bcrypt = await import('bcryptjs');
+      const passwordHash = await bcrypt.default.hash(process.env.SUPER_ADMIN_PASSWORD, 12);
+      await User.create({
+        email,
+        name: 'Super Admin',
+        role: 'super_admin',
+        passwordHash
+      });
+      console.log(`✅ Super Admin created: ${email}`);
+    } else {
+      console.log(`ℹ️ Super Admin already exists: ${email}`);
+    }
+  }
 
   await mongoose.disconnect();
   if (mongod) {

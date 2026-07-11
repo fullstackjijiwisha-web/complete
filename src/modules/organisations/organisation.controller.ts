@@ -146,3 +146,21 @@ export const declineAudit: RequestHandler = async (req, res) => {
   await logAudit('audit.declined', 'Organisation', org.id, authUser(req).id);
   res.json({ success: true, data: { status: org.compliance.status } });
 };
+
+export const getCustomCertificate: RequestHandler = async (req, res) => {
+  const orgId = authOrgId(req);
+  const org = await Organisation.findOne({ _id: orgId, isDeleted: false });
+  if (!org) throw ApiError.notFound();
+
+  if (!org.compliance.customCertificateData || !org.compliance.customCertificateFilename) {
+    throw ApiError.notFound('No custom certificate uploaded for this organisation');
+  }
+
+  const pdfBuffer = Buffer.from(org.compliance.customCertificateData, 'base64');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${org.compliance.customCertificateFilename}"`
+  );
+  res.send(pdfBuffer);
+};

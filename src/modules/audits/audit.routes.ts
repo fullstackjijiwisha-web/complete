@@ -9,24 +9,33 @@ export const auditRoutes = Router();
 
 auditRoutes.use(requireAuth);
 
-auditRoutes.get('/slots', roleGuard('hr_admin', 'super_admin'), controller.listSlots);
 auditRoutes.get('/current', roleGuard('hr_admin'), controller.getCurrentForOrg);
 auditRoutes.post(
   '/',
   roleGuard('hr_admin'),
-  validate(z.object({ slotId: z.string().length(24) })),
   controller.book,
 );
 auditRoutes.post(
   '/:id/documents',
   roleGuard('hr_admin'),
-  validate(z.object({ name: z.string().min(1).max(200), url: z.string().url().max(2000) })),
+  validate(
+    z.object({
+      name: z.string().min(1).max(200),
+      url: z.string().url().max(2000).optional(),
+      base64Data: z.string().min(1),
+    }),
+  ),
   controller.addDocument,
+);
+auditRoutes.get(
+  '/:id/documents/:docIndex',
+  roleGuard('hr_admin', 'auditor', 'super_admin'),
+  controller.downloadAuditDocument,
 );
 auditRoutes.get('/:id', roleGuard('hr_admin', 'auditor', 'super_admin'), controller.getById);
 auditRoutes.get(
   '/:id/pack',
-  roleGuard('hr_admin', 'auditor', 'super_admin'),
+  roleGuard('auditor', 'super_admin'),
   controller.exportPack,
 );
 auditRoutes.patch(
@@ -48,6 +57,8 @@ auditRoutes.post(
     z.object({
       decision: z.enum(['passed', 'failed', 'changes_requested']),
       findings: z.string().max(10_000).optional(),
+      filename: z.string().min(1).optional(),
+      base64Data: z.string().min(1).optional(),
     }),
   ),
   controller.decide,

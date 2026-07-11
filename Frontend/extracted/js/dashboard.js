@@ -217,7 +217,9 @@
             ? "Declined (optional)"
             : PC.esc(s.compliance.status.replace(/_/g, " "))) +
       trackStep(s.compliance.status === "certificate_issued", "5", "Compliance certificate",
-        s.compliance.certificateId ? PC.esc(s.compliance.certificateId) : "Pending") +
+        s.compliance.certificateId
+          ? PC.esc(s.compliance.certificateId) + (org.compliance && org.compliance.customCertificateFilename ? '<br><a href="/api/v1/orgs/me/custom-certificate" class="btn btn-green btn-xs mt-1" style="display:inline-block; padding:3px 8px; font-size:0.75rem; text-decoration:none; border-radius:4px; font-weight:600">⬇ Download Certificate</a>' : '')
+          : "Pending") +
       "</div></div>" +
 
       '<p class="small muted mt-3">All figures are computed live from assessment records by the scoring engine — they cannot be edited manually.</p>';
