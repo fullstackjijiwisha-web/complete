@@ -72,7 +72,7 @@ export function createApp(): Express {
   app.post('/api/v1/payments/shopify/webhook', express.raw({ type: 'application/json' }), shopifyWebhook);
 
   // 4. Body parsing (CSV import mounts its own text parser route-level)
-  app.use(express.json({ limit: '10kb' }));
+  app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 
