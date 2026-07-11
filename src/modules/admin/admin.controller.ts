@@ -253,11 +253,15 @@ export const downloadOrgCertificate: RequestHandler = async (req, res) => {
   }
 
   const fileBuffer = Buffer.from(org.compliance.customCertificateData, 'base64');
-  res.setHeader('Content-Type', 'application/octet-stream');
-  res.setHeader(
-    'Content-Disposition',
-    `attachment; filename="${org.compliance.customCertificateFilename}"`,
-  );
+  
+  let contentType = 'application/octet-stream';
+  const lowerName = org.compliance.customCertificateFilename.toLowerCase();
+  if (lowerName.endsWith('.pdf')) contentType = 'application/pdf';
+  else if (lowerName.endsWith('.png')) contentType = 'image/png';
+  else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) contentType = 'image/jpeg';
+
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${org.compliance.customCertificateFilename}"`);
   res.send(fileBuffer);
 };
 
@@ -271,7 +275,14 @@ export const downloadOrgAuditDocument: RequestHandler = async (req, res) => {
   if (!doc || !doc.base64Data) throw ApiError.notFound('Document not found');
 
   const fileBuffer = Buffer.from(doc.base64Data, 'base64');
-  res.setHeader('Content-Type', 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+  
+  let contentType = 'application/octet-stream';
+  const lowerName = doc.name.toLowerCase();
+  if (lowerName.endsWith('.pdf')) contentType = 'application/pdf';
+  else if (lowerName.endsWith('.png')) contentType = 'image/png';
+  else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) contentType = 'image/jpeg';
+
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${doc.name}"`);
   res.send(fileBuffer);
 };
