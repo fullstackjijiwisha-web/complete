@@ -325,6 +325,14 @@
 
       btn.disabled = true;
       const file = fileInput.files[0];
+      const origName = file.name;
+      const extMatch = origName.match(/\.[0-9a-z]+$/i);
+      const ext = extMatch ? extMatch[0] : '';
+      let finalName = nameInput.value.trim();
+      if (ext && !finalName.toLowerCase().includes('.')) {
+        finalName += ext;
+      }
+      
       const reader = new FileReader();
 
       reader.onload = async function () {
@@ -332,7 +340,7 @@
         try {
           await PC.api("/audits/" + (audit._id || audit.id) + "/documents", {
             method: "POST",
-            body: { name: nameInput.value, base64Data: base64Data },
+            body: { name: finalName, base64Data: base64Data },
           });
           refresh();
         } catch (ex) {
