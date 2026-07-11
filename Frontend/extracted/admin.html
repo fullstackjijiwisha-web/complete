@@ -45,7 +45,6 @@
     <div id="admin-main-view" class="admin-grid hidden">
       <div class="admin-sidebar">
         <button class="admin-tab-btn active" data-tab="questions">📚 Question Bank</button>
-        <button class="admin-tab-btn" data-tab="verify">🛡️ Verify Certificates</button>
         <button class="admin-tab-btn" data-tab="orgs">🏢 Organisations</button>
       </div>
 
@@ -61,18 +60,7 @@
           </div>
         </div>
 
-        <!-- Tab: Verify -->
-        <div id="tab-verify" class="card hidden">
-          <div class="card-header-flex">
-            <h2 class="h-md" style="margin:0">Certificate Verification & Revocation</h2>
-          </div>
-          <p class="small muted mb-2">Search and manage the active status of any certificate.</p>
-          <div class="flex" style="gap:10px; margin-bottom:20px;">
-            <input type="text" id="verify-search-input" placeholder="e.g. CERT-2026-..." style="flex:1" class="mono">
-            <button class="btn btn-orange" id="btn-verify-search">Search</button>
-          </div>
-          <div id="verify-search-result"></div>
-        </div>
+
 
         <!-- Tab: Organisations -->
         <div id="tab-orgs" class="card hidden">
