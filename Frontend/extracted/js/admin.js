@@ -241,12 +241,18 @@
           // This does not require knowing the audit id — super admin looks it up by org.
           return `<li style="display:flex; align-items:center; gap:8px;">
             <a href="#"
-               onclick="PC.downloadFile('/admin/orgs/${org._id}/documents/${index}', '${PC.esc(d.name)}'); return false;"
+               class="admin-dl-doc-btn"
+               data-path="/admin/orgs/${org._id}/documents/${index}"
+               data-filename="${PC.esc(d.name)}"
                style="font-weight:600; color:var(--green-700); text-decoration:none">
               ⬇ ${PC.esc(d.name)}
             </a>
             <span class="muted" style="font-size:0.75rem">(${new Date(d.uploadedAt).toLocaleDateString()})</span>
-            <button class="btn btn-ghost btn-sm" onclick="PC.viewFile('/admin/orgs/${org._id}/documents/${index}'); return false;" style="padding: 2px 6px; font-size: 0.75rem; border: 1px solid var(--line); margin-left: 8px;">👀 View doc</button>
+            <button class="btn btn-ghost btn-sm admin-view-doc-btn" 
+                    data-path="/admin/orgs/${org._id}/documents/${index}" 
+                    style="padding: 2px 6px; font-size: 0.75rem; border: 1px solid var(--line); margin-left: 8px;">
+              👀 View doc
+            </button>
           </li>`;
         }).join("");
 
@@ -301,14 +307,15 @@
         `;
       }
 
-      // ── Attached compliance certificate download link ──
       let attachedCertLink = "";
       if (org.compliance.customCertificateFilename) {
         // Use a server-side download route for the cert — avoids embedding large base64 in DOM
         attachedCertLink = `<p class="small mt-1" style="color:#0e7a3d; font-weight:600">
           ✓ Compliance Cert:
           <a href="#"
-             onclick="PC.downloadFile('/admin/orgs/${org._id}/certificate', '${PC.esc(org.compliance.customCertificateFilename)}'); return false;"
+             class="admin-dl-doc-btn"
+             data-path="/admin/orgs/${org._id}/certificate"
+             data-filename="${PC.esc(org.compliance.customCertificateFilename)}"
              style="color:#0e7a3d">
             ${PC.esc(org.compliance.customCertificateFilename)}
           </a>
@@ -369,6 +376,31 @@
     });
     document.querySelectorAll(".btn-toggle-seats").forEach(btn => {
       btn.addEventListener("click", () => PC.toggleOrgSeats(btn.dataset.orgId, btn.dataset.seatsActive === "true"));
+    });
+    
+    // Attach listeners for view and download buttons
+    document.querySelectorAll(".admin-view-doc-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "⏳ Opening...";
+        btn.disabled = true;
+        try {
+          PC.viewFile(btn.dataset.path);
+        } finally {
+          setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }, 1000);
+        }
+      });
+    });
+
+    document.querySelectorAll(".admin-dl-doc-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        PC.downloadFile(btn.dataset.path, btn.dataset.filename);
+      });
     });
   }
 
