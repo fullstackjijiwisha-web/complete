@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { User } from '../users/user.model';
 import type { IUser } from '../users/user.model';
 import { Organisation } from '../organisations/organisation.model';
+import type { IOrganisation, CompanySize } from '../organisations/organisation.model';
 import { Invite } from './invite.model';
 import { ApiError } from '../../utils/ApiError';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../utils/jwt';
@@ -40,9 +41,14 @@ export async function issueTokens(user: UserDoc): Promise<TokenPair> {
 export async function registerOrg(input: {
   orgName: string;
   registrationNo?: string;
+  industry?: string;
+  companySize?: CompanySize;
+  gst?: string;
+  billingContact?: { name?: string; email?: string };
   headcount: number;
   adminName: string;
   email: string;
+  adminMobile?: string;
   adminWhatsapp?: string;
   password: string;
 }): Promise<{ user: UserDoc; orgCode: string; tokens: TokenPair }> {
@@ -50,13 +56,18 @@ export async function registerOrg(input: {
   if (existing) throw ApiError.conflict('An account with this email already exists');
 
   // Random org codes collide rarely; retry a few times before giving up.
-  let org = null;
+  let org: HydratedDocument<IOrganisation> | null = null;
+
   for (let i = 0; i < 5 && !org; i++) {
     try {
       org = await Organisation.create({
         name: input.orgName,
         orgCode: newOrgCode(new Date().getFullYear()),
         registrationNo: input.registrationNo,
+        industry: input.industry,
+        companySize: input.companySize,
+        gst: input.gst,
+        billingContact: input.billingContact,
         headcount: input.headcount,
       });
     } catch (err) {
@@ -71,6 +82,7 @@ export async function registerOrg(input: {
     role: 'hr_admin',
     orgId: org._id,
     name: input.adminName,
+    mobile: input.adminMobile,
     whatsapp: input.adminWhatsapp,
     status: 'active',
   });

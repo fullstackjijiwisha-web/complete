@@ -14,6 +14,7 @@ const INVITE_TTL_DAYS = 7;
 export async function createEmployee(
   orgId: string,
   input: { name: string; email: string; whatsapp?: string },
+  originUrl?: string,
 ): Promise<{ userId: string; employeeCode: string }> {
   const existing = await User.findOne({ email: input.email.toLowerCase() });
   if (existing) throw ApiError.conflict(`An account with email ${input.email} already exists`);
@@ -37,7 +38,7 @@ export async function createEmployee(
     status: 'invited',
   });
 
-  await issueInvite(user.id, orgId, input.email, org.name, input.whatsapp);
+  await issueInvite(user.id, orgId, input.email, org.name, input.whatsapp, originUrl);
   return { userId: user.id, employeeCode: code };
 }
 
@@ -47,6 +48,7 @@ export async function issueInvite(
   email: string,
   orgName: string,
   whatsapp?: string,
+  originUrl?: string,
 ): Promise<void> {
   const rawToken = newInviteToken();
   await Invite.deleteMany({ userId: new Types.ObjectId(userId) });
@@ -58,7 +60,8 @@ export async function issueInvite(
     expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 86_400_000),
   });
 
-  const link = `${env.CLIENT_URL}/invite/accept?token=${rawToken}`;
+  const baseUrl = originUrl || env.CLIENT_URL;
+  const link = `${baseUrl}/invite/accept?token=${rawToken}`;
   await sendEmail({
     to: email,
     subject: `You're invited to the POSH assessment — ${orgName}`,

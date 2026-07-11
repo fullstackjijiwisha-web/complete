@@ -21,6 +21,10 @@ employeeRoutes.post(
   ),
   controller.addEmployee,
 );
+// Blank CSV template download — helps HR admins format their employee file correctly.
+employeeRoutes.get('/import/template', controller.downloadImportTemplate);
+// Exposes a downloadable CSV error report of the last CSV bulk upload.
+employeeRoutes.get('/import/errors', controller.downloadImportErrors);
 // Raw CSV upload — parsed and re-validated entirely server-side (PRD §12).
 employeeRoutes.post(
   '/import',
@@ -30,3 +34,4 @@ employeeRoutes.post(
 employeeRoutes.post('/:id/resend-invite', controller.resendInvite);
 employeeRoutes.patch('/:id/approve-reattempt', controller.approveReattempt);
 employeeRoutes.delete('/:id', controller.removeEmployee);
+

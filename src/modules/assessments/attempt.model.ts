@@ -70,5 +70,7 @@ const attemptSchema = new Schema<IAssessmentAttempt>(
 
 attemptSchema.index({ userId: 1, cycle: 1, status: 1 });
 attemptSchema.index({ orgId: 1, cycle: 1, submittedAt: 1 });
+// Cron sweep: find in_progress attempts whose timer has expired — must be fast at scale.
+attemptSchema.index({ status: 1, expiresAt: 1 });
 
 export const AssessmentAttempt = model<IAssessmentAttempt>('AssessmentAttempt', attemptSchema);

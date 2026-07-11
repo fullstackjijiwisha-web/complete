@@ -183,6 +183,7 @@
       '<div class="chart-card mb-3"><div class="c-head"><div><div class="c-title">Employee roster</div>' +
       '<div class="c-sub">Enrol employees below — each receives a personal invite link' +
       ' <span class="mono">(dev without SMTP: links print in the backend console)</span></div></div>' +
+      '<button class="btn btn-ghost btn-sm" id="btn-download-template" style="margin-right:8px">⬇ Download Template</button>' +
       '<button class="btn btn-ghost btn-sm" id="btn-import-csv">⬆ Import CSV</button></div>' +
       '<form class="flex mt-2" id="enrol-form" style="flex-wrap:wrap;gap:10px">' +
       '<input name="name" required minlength="2" placeholder="Full name" style="flex:1;min-width:150px">' +
@@ -371,6 +372,14 @@
   function wireCsvImport() {
     const fileInput = document.getElementById("csv-file");
     document.getElementById("btn-import-csv").addEventListener("click", function () { fileInput.click(); });
+    
+    const dlTemplateBtn = document.getElementById("btn-download-template");
+    if (dlTemplateBtn) {
+      dlTemplateBtn.addEventListener("click", function () {
+        PC.downloadFile("/orgs/me/employees/import/template", "employee-import-template.csv");
+      });
+    }
+
     fileInput.addEventListener("change", async function () {
       if (!fileInput.files.length) return;
       const text = await fileInput.files[0].text();
@@ -384,9 +393,18 @@
         let html = res.createdCount + " employee" + (res.createdCount === 1 ? "" : "s") + " enrolled and invited.";
         if (res.errorCount) {
           html += "<br><strong>" + res.errorCount + " row" + (res.errorCount === 1 ? "" : "s") + " failed:</strong><br>" +
-            res.errors.map(function (er) { return "Row " + er.row + ": " + PC.esc(er.error); }).join("<br>");
+            res.errors.map(function (er) { return "Row " + er.row + ": " + PC.esc(er.error); }).join("<br>") +
+            '<br><br><button class="btn btn-sm btn-orange mt-2" id="btn-download-errors">⬇ Download Error Report (CSV)</button>';
         }
         PC.alertModal("CSV import result", html);
+        
+        const dlErrorsBtn = document.getElementById("btn-download-errors");
+        if (dlErrorsBtn) {
+          dlErrorsBtn.addEventListener("click", function () {
+            PC.downloadFile("/orgs/me/employees/import/errors", "employee-import-errors.csv");
+          });
+        }
+        
         load();
       } catch (e) {
         PC.alertModal("CSV import failed", PC.esc(e.message));

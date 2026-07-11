@@ -11,10 +11,20 @@ export type ComplianceStatus =
   | 'failed'
   | 'certificate_issued';
 
+export type CompanySize = 'micro' | 'small' | 'medium' | 'large';
+
 export interface IOrganisation {
   name: string;
   orgCode: string;
   registrationNo?: string;
+  industry?: string;
+  companySize?: CompanySize;
+  /** GST Identification Number — optional; formats vary by state */
+  gst?: string;
+  billingContact?: {
+    name?: string;
+    email?: string;
+  };
   headcount: number;
   reportingPeriod?: { start: Date; end: Date };
   pricingTier?: string;
@@ -37,6 +47,7 @@ export interface IOrganisation {
     certificateId?: string;
     validTill?: Date;
   };
+  lastImportErrors?: Array<{ row: number; error: string }>;
   isDeleted: boolean;
   deletedAt?: Date;
   createdAt: Date;
@@ -48,6 +59,13 @@ const organisationSchema = new Schema<IOrganisation>(
     name: { type: String, required: true, trim: true },
     orgCode: { type: String, required: true, unique: true },
     registrationNo: { type: String },
+    industry: { type: String, trim: true },
+    companySize: { type: String, enum: ['micro', 'small', 'medium', 'large'] },
+    gst: { type: String, trim: true },
+    billingContact: {
+      name: { type: String, trim: true },
+      email: { type: String, trim: true, lowercase: true },
+    },
     headcount: { type: Number, required: true, min: 1 },
     reportingPeriod: { start: Date, end: Date },
     pricingTier: { type: String },
@@ -80,6 +98,12 @@ const organisationSchema = new Schema<IOrganisation>(
       certificateId: { type: String },
       validTill: { type: Date },
     },
+    lastImportErrors: [
+      {
+        row: { type: Number, required: true },
+        error: { type: String, required: true },
+      },
+    ],
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
   },

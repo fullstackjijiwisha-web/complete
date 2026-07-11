@@ -10,6 +10,7 @@ export interface IUser {
   orgId?: Types.ObjectId;
   employeeCode?: string;
   name: string;
+  mobile?: string;
   whatsapp?: string;
   refreshTokenHash?: string;
   failedLogins: number;
@@ -38,6 +39,7 @@ const userSchema = new Schema<IUser>(
     orgId: { type: Schema.Types.ObjectId, ref: 'Organisation', index: true },
     employeeCode: { type: String },
     name: { type: String, required: true, trim: true },
+    mobile: { type: String, trim: true },
     whatsapp: { type: String, trim: true },
     refreshTokenHash: { type: String },
     failedLogins: { type: Number, default: 0 },

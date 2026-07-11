@@ -27,7 +27,7 @@
         '<p class="small muted mt-1 mb-2">Enrolled by your organisation? Activate your account with the invite link from your email.</p>' +
         '<div class="flex" style="justify-content:center">' +
         '<button class="btn btn-orange" data-login>Login</button>' +
-        '<button class="btn btn-ghost" onclick="PC.openAuth(\'invite\')">Accept Invite</button></div></div>';
+        '<button class="btn btn-ghost" data-invite>Accept Invite</button></div></div>';
       return;
     }
     if (user.role !== "employee") {
