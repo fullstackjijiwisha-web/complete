@@ -21,6 +21,7 @@ export interface IAuditDocument {
   name: string;
   url: string; // storage integration (S3/Cloudinary signed upload) is an open infra item — PRD §16
   uploadedAt: Date;
+  base64Data?: string; // stored base64 file content
 }
 
 export interface IAudit {
@@ -71,6 +72,7 @@ const auditSchema = new Schema<IAudit>(
         name: { type: String, required: true },
         url: { type: String, required: true },
         uploadedAt: { type: Date, required: true },
+        base64Data: { type: String },
       },
     ],
     checklist: [

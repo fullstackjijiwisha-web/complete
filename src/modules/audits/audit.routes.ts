@@ -19,8 +19,19 @@ auditRoutes.post(
 auditRoutes.post(
   '/:id/documents',
   roleGuard('hr_admin'),
-  validate(z.object({ name: z.string().min(1).max(200), url: z.string().url().max(2000) })),
+  validate(
+    z.object({
+      name: z.string().min(1).max(200),
+      url: z.string().url().max(2000).optional(),
+      base64Data: z.string().min(1),
+    }),
+  ),
   controller.addDocument,
+);
+auditRoutes.get(
+  '/:id/documents/:docIndex',
+  roleGuard('hr_admin', 'auditor', 'super_admin'),
+  controller.downloadAuditDocument,
 );
 auditRoutes.get('/:id', roleGuard('hr_admin', 'auditor', 'super_admin'), controller.getById);
 auditRoutes.get(

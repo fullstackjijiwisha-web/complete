@@ -263,13 +263,25 @@
       const seatBtnText = org.seatsActive ? "Deactivate Seats" : "Activate Seats";
       const seatBadge = org.seatsActive ? '<span class="badge badge-good">Active</span>' : '<span class="badge badge-warning">Pending Payment</span>';
       
+      let evidencePackHtml = "";
+      if (org.currentAudit && org.currentAudit.documents.length) {
+        evidencePackHtml = '<div class="mt-2" style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:10px;">' +
+          '<h4 class="small" style="margin:0; font-weight:700; color:var(--green-900)">📁 Evidence Pack Documents:</h4>' +
+          '<ul style="margin:6px 0 0; padding-left:20px; font-size:0.85rem; display:flex; flex-direction:column; gap:4px; list-style-type:disc">' +
+          org.currentAudit.documents.map(d => `<li><a href="${d.downloadUrl}" target="_blank" style="font-weight:600; color:var(--green-700); text-decoration:none">${PC.esc(d.name)}</a> <span class="muted" style="font-size:0.75rem">(${new Date(d.uploadedAt).toLocaleDateString()})</span></li>`).join("") +
+          '</ul></div>';
+      } else if (org.compliance.status !== "not_started") {
+        evidencePackHtml = '<p class="small muted mt-1"><em>No evidence files uploaded yet.</em></p>';
+      }
+
       return `
         <div class="card" style="padding:16px;">
           <div class="flex spread" style="flex-wrap:wrap; gap:10px;">
-            <div>
+            <div style="flex:1; min-width:280px;">
               <h3 class="h-sm" style="margin:0">${PC.esc(org.name)} <span class="mono small muted">(${org.orgCode})</span></h3>
               <p class="small muted mt-1">Headcount: ${org.headcount} · Seats: ${seatBadge} · Compliance: <span class="badge">${org.compliance.status.replace(/_/g, " ")}</span></p>
               ${org.compliance.customCertificateFilename ? `<p class="small text-green mt-1">✓ Attached Cert: <a href="/api/v1/orgs/me/custom-certificate" style="font-weight:600">${PC.esc(org.compliance.customCertificateFilename)}</a></p>` : ""}
+              ${evidencePackHtml}
             </div>
             <div class="flex" style="gap:8px; align-items:center;">
               <button class="btn btn-ghost btn-sm" onclick="PC.toggleOrgSeats('${org._id}', ${org.seatsActive})">${seatBtnText}</button>

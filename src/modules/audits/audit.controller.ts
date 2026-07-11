@@ -78,9 +78,34 @@ export const addDocument: RequestHandler = async (req, res) => {
   });
   if (!audit) throw ApiError.notFound();
 
-  audit.documents.push({ name: req.body.name, url: req.body.url, uploadedAt: new Date() });
+  audit.documents.push({
+    name: req.body.name,
+    url: req.body.url || 'local_upload',
+    base64Data: req.body.base64Data,
+    uploadedAt: new Date(),
+  });
   await audit.save();
   res.status(201).json({ success: true, data: { documents: audit.documents.length } });
+};
+
+export const downloadAuditDocument: RequestHandler = async (req, res) => {
+  const user = authUser(req);
+  const filter: Record<string, unknown> = { _id: req.params.id };
+  if (user.role === 'hr_admin') filter.orgId = new Types.ObjectId(authOrgId(req));
+  else if (user.role === 'auditor') filter.auditorId = new Types.ObjectId(user.id);
+  // super_admin: unrestricted
+
+  const audit = await Audit.findOne(filter);
+  if (!audit) throw ApiError.notFound();
+
+  const index = parseInt(req.params.docIndex as string, 10);
+  const doc = audit.documents[index];
+  if (!doc || !doc.base64Data) throw ApiError.notFound('Document file not found');
+
+  const fileBuffer = Buffer.from(doc.base64Data, 'base64');
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+  res.send(fileBuffer);
 };
 
 // HR sees own-org audits; auditors only audits assigned to them (PRD §2.2).

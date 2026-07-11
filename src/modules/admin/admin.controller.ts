@@ -83,9 +83,30 @@ export const listOrgs: RequestHandler = async (req, res) => {
     Organisation.countDocuments({}),
     Organisation.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit),
   ]);
+
+  const orgsWithAudits = await Promise.all(
+    orgs.map(async (org) => {
+      const audit = await Audit.findOne({ orgId: org._id }).sort({ createdAt: -1 });
+      return {
+        ...org.toObject(),
+        currentAudit: audit
+          ? {
+              id: audit._id,
+              status: audit.status,
+              documents: audit.documents.map((d, index) => ({
+                name: d.name,
+                uploadedAt: d.uploadedAt,
+                downloadUrl: `/api/v1/audits/${audit._id}/documents/${index}`,
+              })),
+            }
+          : null,
+      };
+    }),
+  );
+
   res.json({
     success: true,
-    data: orgs,
+    data: orgsWithAudits,
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   });
 };
