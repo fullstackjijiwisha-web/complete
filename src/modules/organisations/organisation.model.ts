@@ -46,6 +46,8 @@ export interface IOrganisation {
     status: ComplianceStatus;
     certificateId?: string;
     validTill?: Date;
+    customCertificateFilename?: string;
+    customCertificateData?: string; // base64 string
   };
   lastImportErrors?: Array<{ row: number; error: string }>;
   isDeleted: boolean;
@@ -97,6 +99,8 @@ const organisationSchema = new Schema<IOrganisation>(
       },
       certificateId: { type: String },
       validTill: { type: Date },
+      customCertificateFilename: { type: String },
+      customCertificateData: { type: String },
     },
     lastImportErrors: [
       {

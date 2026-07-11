@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Super Admin Panel — POSH Compass</title>
+<meta name="description" content="Super Admin control panel for Jijiwisha Society platform managers.">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  .admin-grid { display: grid; grid-template-columns: 240px 1fr; gap: 24px; align-items: start; margin-top: 24px; }
+  .admin-sidebar { display: flex; flex-direction: column; gap: 6px; }
+  .admin-tab-btn { padding: 12px 16px; border-radius: 8px; font-weight: 500; font-size: 0.95rem; color: var(--ink-2); cursor: pointer; text-align: left; transition: all 0.2s; border: none; background: transparent; }
+  .admin-tab-btn:hover { background: var(--hover); color: var(--ink-1); }
+  .admin-tab-btn.active { background: var(--green-900); color: #fff; }
+  .card-header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 18px; }
+  .question-list-item { border-bottom: 1px solid var(--line); padding: 16px 0; }
+  .question-list-item:last-child { border-bottom: none; }
+  .pill-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+</style>
+</head>
+<body data-page="admin.html">
+
+<header id="topnav"></header>
+
+<section class="hero">
+  <div class="container" style="padding-top:40px;padding-bottom:32px;max-width:1000px;margin:0 auto">
+    <span class="eyebrow on-dark">Jijiwisha Society Operations</span>
+    <h1 class="h-xl" style="color:#fff">Super Admin Panel</h1>
+    <p class="lede" style="color:#d5e2da;margin-top:8px">Platform level controls, global question bank, certificate verification, and custom compliance uploads.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container" style="max-width:1000px">
+    <div id="admin-auth-guard" class="hidden">
+      <div class="card center" style="padding:48px">
+        <h2 class="h-md">Super Admin Access Required</h2>
+        <p class="small muted mt-1">Please sign in with a super admin account to view this dashboard.</p>
+        <div class="flex mt-2" style="justify-content:center">
+          <button class="btn btn-orange" data-login>Sign In</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="admin-main-view" class="admin-grid hidden">
+      <div class="admin-sidebar">
+        <button class="admin-tab-btn active" data-tab="questions">📚 Question Bank</button>
+        <button class="admin-tab-btn" data-tab="verify">🛡️ Verify Certificates</button>
+        <button class="admin-tab-btn" data-tab="orgs">🏢 Organisations</button>
+      </div>
+
+      <div class="admin-content">
+        <!-- Tab: Questions -->
+        <div id="tab-questions" class="card">
+          <div class="card-header-flex">
+            <h2 class="h-md" style="margin:0">Global Question Bank</h2>
+            <button class="btn btn-orange btn-sm" id="btn-add-question">+ Add New Question</button>
+          </div>
+          <div id="questions-container" style="display:flex; flex-direction:column; gap:12px;">
+            <p class="small muted">Loading questions...</p>
+          </div>
+        </div>
+
+        <!-- Tab: Verify -->
+        <div id="tab-verify" class="card hidden">
+          <div class="card-header-flex">
+            <h2 class="h-md" style="margin:0">Certificate Verification & Revocation</h2>
+          </div>
+          <p class="small muted mb-2">Search and manage the active status of any certificate.</p>
+          <div class="flex" style="gap:10px; margin-bottom:20px;">
+            <input type="text" id="verify-search-input" placeholder="e.g. CERT-2026-..." style="flex:1" class="mono">
+            <button class="btn btn-orange" id="btn-verify-search">Search</button>
+          </div>
+          <div id="verify-search-result"></div>
+        </div>
+
+        <!-- Tab: Organisations -->
+        <div id="tab-orgs" class="card hidden">
+          <div class="card-header-flex">
+            <h2 class="h-md" style="margin:0">Registered Organisations</h2>
+          </div>
+          <div id="orgs-container" style="display:flex; flex-direction:column; gap:16px;">
+            <p class="small muted">Loading organisations...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Modal: Add/Edit Question -->
+<div class="modal-overlay" id="question-modal">
+  <div class="modal" style="max-width:550px">
+    <button class="close" id="question-modal-close">✕</button>
+    <h2 id="q-modal-title">Add New Question</h2>
+    <form id="question-form" style="margin-top:14px">
+      <input type="hidden" id="q-field-id">
+      <div class="field">
+        <label>Format</label>
+        <select id="q-field-type" required>
+          <option value="mcq">Multiple Choice Question (MCQ)</option>
+          <option value="fib">Fill in the Blanks (FIB)</option>
+          <option value="case_study">Case Study (Judgment)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Act Reference</label>
+        <input type="text" id="q-field-ref" placeholder="e.g. POSH Act 2013, Section 4" required>
+      </div>
+      <div class="field">
+        <label>Difficulty</label>
+        <select id="q-field-diff" required>
+          <option value="easy">Easy</option>
+          <option value="medium" selected>Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Question Body</label>
+        <textarea id="q-field-body" rows="3" required placeholder="Question text..."></textarea>
+      </div>
+      
+      <!-- Option block (MCQ / Case Study) -->
+      <div id="q-block-options">
+        <label style="font-weight:600; font-size:0.9rem;">Options & Weights (1.0 = Correct, 0.0 = Wrong)</label>
+        <div id="q-options-list" style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
+          <!-- dynamic options -->
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm mt-1" id="btn-add-option-row">+ Add Option Row</button>
+      </div>
+
+      <!-- Blank block (FIB) -->
+      <div id="q-block-blanks" class="hidden">
+        <label style="font-weight:600; font-size:0.9rem;">Accepted Answers (Synonyms/Alternatives)</label>
+        <div id="q-blanks-list" style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
+          <!-- dynamic blanks -->
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm mt-1" id="btn-add-blank-row">+ Add Blank Row</button>
+      </div>
+
+      <div id="q-form-error" class="hidden" style="color:var(--orange-700); margin:12px 0; font-size:0.85rem"></div>
+
+      <button class="btn btn-orange mt-2" style="width:100%; justify-content:center">Save Question</button>
+    </form>
+  </div>
+</div>
+
+<footer id="footer"></footer>
+
+<script src="js/main.js"></script>
+<script src="js/api.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

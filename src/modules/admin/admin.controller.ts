@@ -190,3 +190,33 @@ export const setTrustScore: RequestHandler = async (req, res) => {
   });
   res.json({ success: true, data: { trustScore: req.body.trustScore } });
 };
+
+export const uploadCertificate: RequestHandler = async (req, res) => {
+  const { id } = req.params;
+  const { filename, base64Data } = req.body as { filename: string; base64Data: string };
+
+  if (!filename || !base64Data) {
+    throw ApiError.badRequest('Missing filename or base64Data');
+  }
+
+  const org = await Organisation.findById(id);
+  if (!org) throw ApiError.notFound();
+
+  // Save the custom certificate data and set status to certificate_issued
+  org.compliance.status = 'certificate_issued';
+  org.compliance.certificateId = `COMP-${org.orgCode}-${Date.now().toString(36).toUpperCase()}`;
+  org.compliance.validTill = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year validity
+  org.compliance.customCertificateFilename = filename;
+  org.compliance.customCertificateData = base64Data;
+
+  await org.save();
+  await logAudit('admin.certificate_uploaded', 'Organisation', org.id, authUser(req).id, { filename });
+
+  res.json({
+    success: true,
+    data: {
+      certificateId: org.compliance.certificateId,
+      filename: org.compliance.customCertificateFilename,
+    },
+  });
+};

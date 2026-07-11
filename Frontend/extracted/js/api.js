@@ -112,7 +112,9 @@
   };
 
   PC.roleHome = function (role) {
-    return role === "employee" ? "employee.html" : "dashboard.html";
+    if (role === "employee") return "employee.html";
+    if (role === "super_admin") return "admin.html";
+    return "dashboard.html";
   };
 
   PC.logout = async function () {

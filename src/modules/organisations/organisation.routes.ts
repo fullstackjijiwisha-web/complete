@@ -38,3 +38,4 @@ organisationRoutes.get('/me/dashboard', controller.getDashboard);
 organisationRoutes.get('/me/ready-certificate', controller.getReadyCertificate);
 organisationRoutes.get('/me/ready-certificate/pdf', controller.getReadyCertificatePdf);
 organisationRoutes.post('/me/audit/decline', controller.declineAudit);
+organisationRoutes.get('/me/custom-certificate', controller.getCustomCertificate);
