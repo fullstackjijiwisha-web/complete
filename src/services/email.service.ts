@@ -39,6 +39,7 @@ export interface EmailMessage {
   subject: string;
   text: string;
   cc?: string | string[];
+  attachments?: Array<{ filename: string; content: Buffer }>;
 }
 
 function ccList(cc?: string | string[]): Array<{ email: string }> {
@@ -50,6 +51,11 @@ function ccList(cc?: string | string[]): Array<{ email: string }> {
 // verified sender in the Brevo account, or Brevo returns a 400.
 async function sendViaBrevo(message: EmailMessage): Promise<void> {
   const cc = ccList(message.cc);
+  const attachmentsMapped = message.attachments?.map((a) => ({
+    name: a.filename,
+    content: a.content.toString('base64'),
+  }));
+
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -63,6 +69,7 @@ async function sendViaBrevo(message: EmailMessage): Promise<void> {
       ...(cc.length ? { cc } : {}),
       subject: message.subject,
       textContent: message.text,
+      ...(attachmentsMapped?.length ? { attachment: attachmentsMapped } : {}),
     }),
   });
   if (!res.ok) {
@@ -80,6 +87,7 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
       cc: message.cc,
       subject: message.subject,
       body: message.text,
+      attachmentsCount: message.attachments?.length ?? 0,
     });
     return;
   }

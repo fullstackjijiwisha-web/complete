@@ -58,6 +58,8 @@ auditRoutes.post(
     z.object({
       decision: z.enum(['passed', 'failed', 'changes_requested']),
       findings: z.string().max(10_000).optional(),
+      filename: z.string().min(1).optional(),
+      base64Data: z.string().min(1).optional(),
     }),
   ),
   controller.decide,

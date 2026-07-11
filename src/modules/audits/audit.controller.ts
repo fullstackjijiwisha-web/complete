@@ -11,6 +11,7 @@ import { newCompId, currentCycle } from '../../utils/ids';
 import { logAudit } from '../auditlog/auditLog.model';
 import { refreshPublicStats } from '../stats/stats.service';
 import { invalidateDashboardCache } from '../organisations/dashboard.service';
+import { sendEmail } from '../../services/email.service';
 
 export const listSlots: RequestHandler = async (_req, res) => {
   const slots = await AuditSlot.find({ isBooked: false, startsAt: { $gt: new Date() } })
@@ -84,6 +85,18 @@ export const addDocument: RequestHandler = async (req, res) => {
     base64Data: req.body.base64Data,
     uploadedAt: new Date(),
   });
+
+  // If the audit was previously declined or changes requested, reset it to pending review
+  if (['changes_requested', 'failed'].includes(audit.status)) {
+    audit.status = 'requested';
+    const org = await Organisation.findById(audit.orgId);
+    if (org) {
+      org.compliance.status = 'requested';
+      await org.save();
+      invalidateDashboardCache(org._id.toString());
+    }
+  }
+
   await audit.save();
   res.status(201).json({ success: true, data: { documents: audit.documents.length } });
 };
@@ -152,22 +165,32 @@ export const decide: RequestHandler = async (req, res) => {
 
   const decision = req.body.decision as 'passed' | 'failed' | 'changes_requested';
   if (decision === 'passed' && audit.checklist.some((c) => c.status !== 'ok')) {
-    // Certificate only with checklist complete (PRD §2.2 role matrix).
     throw ApiError.badRequest('All checklist items must be ok before passing');
   }
 
+  const { filename, base64Data, findings } = req.body as {
+    filename?: string;
+    base64Data?: string;
+    findings?: string;
+  };
+
   audit.status = decision;
-  audit.findings = req.body.findings ?? audit.findings;
+  audit.findings = findings ?? audit.findings;
   audit.decisionAt = new Date();
 
   const org = await Organisation.findById(audit.orgId);
   if (!org) throw ApiError.notFound();
 
+  // Find the HR admin user to send email to
+  const hrAdmin = await User.findOne({ orgId: org._id, role: 'hr_admin', isDeleted: false });
+
   let compCertificate: { compId: string; validTill: Date } | null = null;
+
   if (decision === 'passed') {
     const issuedAt = new Date();
     const validTill = new Date(issuedAt);
     validTill.setMonth(validTill.getMonth() + 13); // 13-month validity
+
     const comp = await ComplianceCertificate.create({
       compId: newCompId(issuedAt.getFullYear(), org.orgCode),
       orgId: org._id,
@@ -175,11 +198,66 @@ export const decide: RequestHandler = async (req, res) => {
       issuedAt,
       validTill,
     });
+
     audit.status = 'certificate_issued';
-    org.compliance = { status: 'certificate_issued', certificateId: comp.compId, validTill };
+    org.compliance = {
+      status: 'certificate_issued',
+      certificateId: comp.compId,
+      validTill,
+      customCertificateFilename: filename,
+      customCertificateData: base64Data,
+    };
     compCertificate = { compId: comp.compId, validTill };
+
+    // Send Acceptance Email with Certificate Attachment
+    if (hrAdmin) {
+      const emailAttachments =
+        filename && base64Data
+          ? [{ filename, content: Buffer.from(base64Data, 'base64') }]
+          : [];
+
+      await sendEmail({
+        to: hrAdmin.email,
+        subject: `✓ POSH Compliance Verification Passed — ${org.name}`,
+        text: `Dear HR Admin,
+
+We are pleased to inform you that Jijiwisha Society has completed the compliance audit for ${org.name}.
+
+Status: PASSED (POSH Compliant)
+Certificate ID: ${comp.compId}
+Valid Till: ${validTill.toLocaleDateString('en-IN')}
+
+Your official POSH Compliance Certificate is attached to this email. You can also view and download it directly from your POSH Compass dashboard.
+
+Regards,
+Jijiwisha Society Operations Team`,
+        attachments: emailAttachments,
+      });
+    }
   } else {
     org.compliance.status = decision;
+
+    // Send Decline Email with Remarks
+    if (hrAdmin) {
+      const statusLabel = decision === 'changes_requested' ? 'Changes Requested' : 'Failed';
+      await sendEmail({
+        to: hrAdmin.email,
+        subject: `⚠️ Action Required: POSH Compliance Review — ${org.name}`,
+        text: `Dear HR Admin,
+
+This is to notify you that Jijiwisha Society has reviewed the compliance records submitted for ${org.name}.
+
+Status: ${statusLabel.toUpperCase()}
+
+Remarks / Findings:
+${findings || 'No specific findings provided.'}
+
+Please address these points on your dashboard and re-submit your documentation for verification once corrected.
+
+Regards,
+Jijiwisha Society Operations Team`,
+      });
+    }
   }
 
   await Promise.all([audit.save(), org.save()]);

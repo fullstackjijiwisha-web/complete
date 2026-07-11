@@ -274,6 +274,28 @@
         evidencePackHtml = '<p class="small muted mt-1"><em>No evidence files uploaded yet.</em></p>';
       }
 
+      // Review panel for active compliance audits
+      let reviewPanelHtml = "";
+      const pendingAudit = org.currentAudit && ['requested', 'scheduled', 'in_review', 'changes_requested'].includes(org.compliance.status);
+      if (pendingAudit) {
+        reviewPanelHtml = `
+          <div class="mt-2" style="border: 1px dashed var(--orange-700); border-radius:6px; padding:12px; background:#fffbfb;">
+            <h4 class="small" style="margin:0; font-weight:700; color:var(--orange-700)">🛡️ Compliance Audit Verification Panel</h4>
+            <div class="field mt-1" style="margin-bottom:8px">
+              <label class="small">Findings / Remarks (will be emailed and shown to HR)</label>
+              <textarea id="findings-${org._id}" rows="2" style="width:100%; font-size:0.85rem" placeholder="e.g. Please sign the IC resolution page before resubmitting."></textarea>
+            </div>
+            <div class="flex" style="gap:8px; flex-wrap:wrap">
+              <label class="btn btn-sm btn-orange" style="cursor:pointer; margin:0">
+                ✓ Approve (Upload Cert)
+                <input type="file" accept="application/pdf,image/*" style="display:none" onchange="PC.handleAuditDecision(event, '${org.currentAudit.id}', 'passed', '${org._id}')">
+              </label>
+              <button class="btn btn-sm btn-ghost" onclick="PC.handleAuditDecision(null, '${org.currentAudit.id}', 'changes_requested', '${org._id}')" style="color:var(--orange-700)">⚠️ Decline & Request Changes</button>
+            </div>
+          </div>
+        `;
+      }
+
       return `
         <div class="card" style="padding:16px;">
           <div class="flex spread" style="flex-wrap:wrap; gap:10px;">
@@ -282,6 +304,7 @@
               <p class="small muted mt-1">Headcount: ${org.headcount} · Seats: ${seatBadge} · Compliance: <span class="badge">${org.compliance.status.replace(/_/g, " ")}</span></p>
               ${org.compliance.customCertificateFilename ? `<p class="small text-green mt-1">✓ Attached Cert: <a href="/api/v1/orgs/me/custom-certificate" style="font-weight:600">${PC.esc(org.compliance.customCertificateFilename)}</a></p>` : ""}
               ${evidencePackHtml}
+              ${reviewPanelHtml}
             </div>
             <div class="flex" style="gap:8px; align-items:center;">
               <button class="btn btn-ghost btn-sm" onclick="PC.toggleOrgSeats('${org._id}', ${org.seatsActive})">${seatBtnText}</button>
@@ -333,6 +356,57 @@
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  PC.handleAuditDecision = async function (event, auditId, decision, orgId) {
+    const findingsEl = document.getElementById(`findings-${orgId}`);
+    const findings = findingsEl ? findingsEl.value.trim() : "";
+
+    if (decision === "changes_requested" && !findings) {
+      alert("Please provide findings/remarks explaining why the evidence pack is declined.");
+      return;
+    }
+
+    if (decision === "passed") {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async function () {
+        const base64Data = reader.result.split(",")[1];
+        try {
+          await PC.api(`/audits/${auditId}/decision`, {
+            method: "POST",
+            body: {
+              decision: "passed",
+              findings: findings,
+              filename: file.name,
+              base64Data: base64Data
+            }
+          });
+          alert(`✓ Audit Approved & Compliance Certificate sent to Organisation.`);
+          loadOrgs();
+        } catch (ex) {
+          alert("Approval failed: " + ex.message);
+        }
+      };
+      reader.readAsDataURL(file);
+    } else {
+      if (!confirm("Are you sure you want to decline this evidence pack and request changes?")) return;
+      try {
+        await PC.api(`/audits/${auditId}/decision`, {
+          method: "POST",
+          body: {
+            decision: "changes_requested",
+            findings: findings
+          }
+        });
+        alert("⚠️ Audit declined. Changes request sent to the organisation.");
+        loadOrgs();
+      } catch (ex) {
+        alert("Decline failed: " + ex.message);
+      }
+    }
   };
 
 })();
