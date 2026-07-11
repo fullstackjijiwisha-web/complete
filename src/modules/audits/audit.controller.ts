@@ -108,8 +108,18 @@ export const downloadAuditDocument: RequestHandler = async (req, res) => {
   if (!doc || !doc.base64Data) throw ApiError.notFound('Document file not found');
 
   const fileBuffer = Buffer.from(doc.base64Data, 'base64');
-  res.setHeader('Content-Type', 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+  let contentType = 'application/octet-stream';
+  let ext = '';
+  if (doc.base64Data.startsWith('JVBERi0')) { contentType = 'application/pdf'; ext = '.pdf'; }
+  else if (doc.base64Data.startsWith('iVBORw0KGgo')) { contentType = 'image/png'; ext = '.png'; }
+  else if (doc.base64Data.startsWith('/9j/')) { contentType = 'image/jpeg'; ext = '.jpg'; }
+
+  let filename = doc.name;
+  if (ext && !filename.toLowerCase().includes('.')) filename += ext;
+
+  res.setHeader('Content-Type', contentType);
+  // Serve as attachment for HR download
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(fileBuffer);
 };
 
