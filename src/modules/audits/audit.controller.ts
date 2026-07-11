@@ -12,6 +12,7 @@ import { logAudit } from '../auditlog/auditLog.model';
 import { refreshPublicStats } from '../stats/stats.service';
 import { invalidateDashboardCache } from '../organisations/dashboard.service';
 import { sendEmail } from '../../services/email.service';
+import { logger } from '../../utils/logger';
 
 // Latest audit for the caller's organisation — lets the HR audit page restore
 // its state without knowing the audit id up front.
@@ -88,6 +89,7 @@ export const addDocument: RequestHandler = async (req, res) => {
 
   await audit.save();
   res.status(201).json({ success: true, data: { documents: audit.documents.length } });
+
 };
 
 export const downloadAuditDocument: RequestHandler = async (req, res) => {
@@ -169,6 +171,9 @@ export const decide: RequestHandler = async (req, res) => {
 
   // Find the HR admin user to send email to
   const hrAdmin = await User.findOne({ orgId: org._id, role: 'hr_admin', isDeleted: false });
+  if (!hrAdmin) {
+    logger.warn('No hr_admin found for org — decision email will not be sent', { orgId: org._id.toString() });
+  }
 
   let compCertificate: { compId: string; validTill: Date } | null = null;
 
