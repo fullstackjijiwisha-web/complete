@@ -756,6 +756,7 @@
     if (e.target.closest("[data-logout]")) { e.preventDefault(); PC.logout(); }
     if (e.target.closest("[data-login]")) { e.preventDefault(); PC.openAuth("login"); }
     if (e.target.closest("[data-register]")) { e.preventDefault(); PC.openAuth("register"); }
+    if (e.target.closest("[data-invite]")) { e.preventDefault(); PC.openAuth("invite"); }
   });
 
   document.addEventListener("DOMContentLoaded", function () {
