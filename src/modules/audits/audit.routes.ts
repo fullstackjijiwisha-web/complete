@@ -14,7 +14,6 @@ auditRoutes.get('/current', roleGuard('hr_admin'), controller.getCurrentForOrg);
 auditRoutes.post(
   '/',
   roleGuard('hr_admin'),
-  validate(z.object({ slotId: z.string().length(24) })),
   controller.book,
 );
 auditRoutes.post(

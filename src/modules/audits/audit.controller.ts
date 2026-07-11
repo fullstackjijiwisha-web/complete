@@ -50,30 +50,22 @@ export const book: RequestHandler = async (req, res) => {
   });
   if (existing) throw ApiError.conflict('An audit is already in progress for this organisation');
 
-  const slot = await AuditSlot.findOneAndUpdate(
-    { _id: req.body.slotId, isBooked: false, startsAt: { $gt: new Date() } },
-    { $set: { isBooked: true } },
-    { new: true },
-  );
-  if (!slot) throw ApiError.badRequest('Slot is no longer available');
-
   const audit = await Audit.create({
     orgId: org._id,
-    status: 'scheduled',
-    slotId: slot._id,
+    status: 'requested',
     checklist: NCW_CHECKLIST_TEMPLATE.map((item) => ({ item, status: 'pending' })),
   });
 
-  org.compliance.status = 'scheduled';
+  org.compliance.status = 'requested';
   await org.save();
   invalidateDashboardCache(orgId);
   await logAudit('audit.booked', 'Audit', audit.id, authUser(req).id, {
-    slot: slot.startsAt.toISOString(),
+    info: 'Audit requested directly without slots'
   });
 
   res.status(201).json({
     success: true,
-    data: { auditId: audit.id, status: audit.status, slot: slot.startsAt },
+    data: { auditId: audit.id, status: audit.status },
   });
 };
 

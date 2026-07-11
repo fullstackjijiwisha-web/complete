@@ -112,11 +112,10 @@
     let body;
     if (audit) {
       body =
-        '<p class="small muted">Audit scheduled with Jijiwisha Society. This booking is recorded and referenced in every later stage.</p>' +
+        '<p class="small muted">Audit request submitted to Jijiwisha Society. This booking is recorded and referenced in every later stage.</p>' +
         '<div class="evidence mt-2"><h3>Booking record</h3><div class="rows">' +
         evRow("Audit ID", '<span class="mono">' + PC.esc(audit._id || audit.id) + "</span>") +
-        evRow("Slot", audit.slotId && audit.slotId.startsAt ? fmtDateTime(audit.slotId.startsAt) : "—") +
-        evRow("Booked", fmtDateTime(audit.createdAt)) +
+        evRow("Submitted", fmtDateTime(audit.createdAt)) +
         evRow("Status", '<span class="badge badge-neutral">' + PC.esc(audit.status.replace(/_/g, " ")) + "</span>") +
         evRow("Auditor", "Jijiwisha Society · empanelled") +
         "</div></div>";
@@ -131,20 +130,15 @@
         '<div class="mt-2"><a class="btn btn-ghost btn-sm" href="dashboard.html">Track readiness on the dashboard →</a></div>';
     } else {
       body =
-        '<p class="small muted">Your organisation is POSH Ready — select an audit slot. The scope declaration is a formal undertaking recorded with the booking.</p>' +
-        '<div class="card-grid cols-2 mt-2">' +
-        '<div class="field"><label for="a-slot">Available slots (Jijiwisha Society)</label><select id="a-slot"><option value="">Loading slots…</option></select></div></div>' +
-        '<label class="small" style="display:flex;gap:9px;align-items:flex-start;cursor:pointer">' +
+        '<p class="small muted">Your organisation is POSH Ready — submit your compliance records for verification by Jijiwisha Society. The scope declaration is a formal undertaking recorded with the booking.</p>' +
+        '<label class="small" style="display:flex;gap:9px;align-items:flex-start;cursor:pointer;margin-top:12px">' +
         '<input type="checkbox" id="a-scope" style="margin-top:3px">' +
         "<span>I declare on behalf of the organisation that the records submitted for this audit are complete and accurate, and I consent to verification of the Internal Committee's constitution and process. <em>(recorded with the booking)</em></span></label>" +
-        '<div class="mt-2"><button class="btn btn-orange" id="a-book">Book Audit with Jijiwisha Society</button></div>' +
-        '<div id="a-book-msg" class="small mt-1"></div>';
+        '<div class="mt-2"><button class="btn btn-orange" id="a-book">Submit Audit to Jijiwisha Society</button></div>' +
+        '<div id="a-book-msg" class="small mt-1" style="color:var(--orange-700)"></div>';
     }
-    return shell(1, status, "Book the Audit",
-      audit ? '<span class="badge badge-good">✓ Scheduled</span>'
-        : dash.readiness.auditUnlocked ? '<span class="badge badge-warning">◷ Scheduling open</span>'
-        : '<span class="badge badge-neutral">Locked — needs POSH Ready</span>',
-      body);
+    return shell(1, status, "Request Audit & Compliance Verification",
+      audit ? '<span class="badge badge-good">✓ Requested</span>' : '<span class="badge badge-neutral">POSH Ready required</span>', body);
   }
 
   /* ── Stage 2: documents ── */
@@ -273,30 +267,18 @@
     });
 
     // Stage 1: slots + booking
-    const slotSel = document.getElementById("a-slot");
-    if (slotSel) {
-      PC.api("/audits/slots").then(function (slots) {
-        if (!slots.length) {
-          slotSel.innerHTML = '<option value="">No open slots — contact Jijiwisha Society</option>';
-          return;
-        }
-        slotSel.innerHTML = slots.map(function (s) {
-          return '<option value="' + PC.esc(s.id) + '">' + fmtDateTime(s.startsAt) + "</option>";
-        }).join("");
-      }).catch(function (e) {
-        slotSel.innerHTML = '<option value="">Could not load slots: ' + PC.esc(e.message) + "</option>";
-      });
-
-      document.getElementById("a-book").addEventListener("click", async function () {
+    // Stage 1: slots + booking
+    const bookBtn = document.getElementById("a-book");
+    if (bookBtn) {
+      bookBtn.addEventListener("click", async function () {
         const msg = document.getElementById("a-book-msg");
-        if (!slotSel.value) { msg.textContent = "Select an audit slot."; return; }
         if (!document.getElementById("a-scope").checked) {
           msg.textContent = "The scope declaration must be accepted — it is recorded with the booking.";
           return;
         }
         this.disabled = true;
         try {
-          await PC.api("/audits", { body: { slotId: slotSel.value } });
+          await PC.api("/audits", { method: "POST", body: {} });
           refresh();
         } catch (e) {
           msg.textContent = e.message;
