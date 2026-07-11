@@ -239,13 +239,14 @@
         const docItems = org.currentAudit.documents.map((d, index) => {
           // Use the admin-scoped download route: /admin/orgs/:id/documents/:index
           // This does not require knowing the audit id — super admin looks it up by org.
-          return `<li>
+          return `<li style="display:flex; align-items:center; gap:8px;">
             <a href="#"
                onclick="PC.downloadFile('/admin/orgs/${org._id}/documents/${index}', '${PC.esc(d.name)}'); return false;"
                style="font-weight:600; color:var(--green-700); text-decoration:none">
               ⬇ ${PC.esc(d.name)}
             </a>
             <span class="muted" style="font-size:0.75rem">(${new Date(d.uploadedAt).toLocaleDateString()})</span>
+            <button class="btn btn-ghost btn-sm" onclick="PC.viewFile('/admin/orgs/${org._id}/documents/${index}'); return false;" style="padding: 2px 6px; font-size: 0.75rem; border: 1px solid var(--line); margin-left: 8px;">👀 View doc</button>
           </li>`;
         }).join("");
 

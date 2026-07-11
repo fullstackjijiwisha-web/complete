@@ -12,6 +12,7 @@ import { logAudit } from '../auditlog/auditLog.model';
 import { refreshPublicStats } from '../stats/stats.service';
 import { invalidateDashboardCache } from '../organisations/dashboard.service';
 import { sendEmail } from '../../services/email.service';
+import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
 
 // Latest audit for the caller's organisation — lets the HR audit page restore
@@ -220,6 +221,8 @@ Valid Till: ${validTill.toLocaleDateString('en-IN')}
 
 Your official POSH Compliance Certificate is attached to this email. You can also view and download it directly from your POSH Compass dashboard.
 
+Log in to your dashboard here: ${env.CLIENT_URL}
+
 Regards,
 Jijiwisha Society Operations Team`,
         attachments: emailAttachments,
@@ -244,6 +247,8 @@ Remarks / Findings:
 ${findings || 'No specific findings provided.'}
 
 Please address these points on your dashboard and re-submit your documentation for verification once corrected.
+
+Log in to your dashboard here: ${env.CLIENT_URL}
 
 Regards,
 Jijiwisha Society Operations Team`,
