@@ -35,7 +35,7 @@ auditRoutes.get(
 auditRoutes.get('/:id', roleGuard('hr_admin', 'auditor', 'super_admin'), controller.getById);
 auditRoutes.get(
   '/:id/pack',
-  roleGuard('hr_admin', 'auditor', 'super_admin'),
+  roleGuard('auditor', 'super_admin'),
   controller.exportPack,
 );
 auditRoutes.patch(

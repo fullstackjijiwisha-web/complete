@@ -216,12 +216,10 @@
       body = '<p class="small muted">Unlocks after booking. Compiles the booking record, document registry, checklist state, readiness snapshot and per-employee certification list (name + status + score band only) into one export.</p>';
     } else {
       body =
-        '<p class="small muted">One-click export of everything the auditor needs: readiness record, roster certification list (score bands only — never raw responses), document registry and checklist state.</p>' +
-        '<div class="mt-2"><button class="btn btn-green" id="a-pack-dl">⬇ Download Evidence Pack (JSON)</button></div>' +
-        '<div id="pack-msg" class="small mt-1"></div>';
+        '<p class="small muted">The compiled evidence pack (including readiness snapshot, document registry, and certifications) has been successfully submitted to Jijiwisha Society for verification.</p>';
     }
-    return shell(4, status, "Evidence Pack Export",
-      audit ? '<span class="badge badge-good">Available</span>' : '<span class="badge badge-neutral">Automatic compilation</span>', body);
+    return shell(4, status, "Evidence Pack",
+      audit ? '<span class="badge badge-good">Submitted</span>' : '<span class="badge badge-neutral">Automatic compilation</span>', body);
   }
 
   /* ── Stage 5: decision / compliance certificate ── */
@@ -332,24 +330,6 @@
     const refreshBtn = document.getElementById("a-refresh");
     if (refreshBtn) refreshBtn.addEventListener("click", refresh);
 
-    // Stage 4: pack download
-    const packBtn = document.getElementById("a-pack-dl");
-    if (packBtn) packBtn.addEventListener("click", async function () {
-      packBtn.disabled = true;
-      try {
-        const pack = await PC.api("/audits/" + (audit._id || audit.id) + "/pack");
-        const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "posh-compass-evidence-pack-" + (audit._id || audit.id) + ".json";
-        a.click();
-        URL.revokeObjectURL(a.href);
-      } catch (e) {
-        document.getElementById("pack-msg").textContent = e.message;
-      } finally {
-        packBtn.disabled = false;
-      }
-    });
   }
 
   // The old localStorage demo had a reset button — hide it, state is server-side now.
