@@ -149,13 +149,10 @@
     } else {
       let rows = "";
       audit.documents.forEach(function (d, i) {
-        const downloadUrl = (d.base64Data || d.url === 'local_upload')
-          ? "/api/v1/audits/" + (audit._id || audit.id) + "/documents/" + i
-          : d.url;
         rows +=
           "<li><span data-icon='doc' data-size='17' data-color='#0e7a3d'></span>" +
           "<span><strong>" + PC.esc(d.name) + "</strong><br><span class='small muted'>" + fmtDateTime(d.uploadedAt) + "</span></span>" +
-          '<span class="ref"><a class="badge badge-good" href="' + downloadUrl + '" target="_blank" rel="noopener">✓ download</a></span></li>';
+          `<span class="ref"><a class="badge badge-good" href="#" onclick="PC.downloadFile('/audits/${audit._id || audit.id}/documents/${i}', '${PC.esc(d.name)}'); return false;">✓ download</a></span></li>`;
       });
       body =
         '<p class="small muted">Register and upload each required POSH compliance record. Each uploaded file is securely saved in the evidence pack.</p>' +
