@@ -279,8 +279,8 @@
 
             <!-- Step 1: Decision buttons -->
             <div class="flex" id="review-step1-${orgId}" style="gap:8px; flex-wrap:wrap; align-items:center">
-              <button class="btn btn-sm btn-orange" onclick="PC.showUploadCertStep('${orgId}')">✓ Approve Evidence</button>
-              <button class="btn btn-sm btn-ghost" onclick="PC.handleDecline('${auditId}', '${orgId}')" style="color:var(--orange-700); border-color:var(--orange-700)">⚠️ Decline & Request Changes</button>
+              <button class="btn btn-sm btn-orange btn-approve" data-org-id="${orgId}">✓ Approve Evidence</button>
+              <button class="btn btn-sm btn-ghost btn-decline" data-audit-id="${auditId}" data-org-id="${orgId}" style="color:var(--orange-700); border-color:var(--orange-700)">⚠️ Decline & Request Changes</button>
             </div>
 
             <!-- Step 2: Upload compliance cert (shown after clicking Approve) -->
@@ -290,10 +290,10 @@
                 <label class="btn btn-sm btn-green" style="cursor:pointer; margin:0" id="cert-label-${orgId}">
                   📄 Choose Certificate (PDF / Image)
                   <input type="file" accept="application/pdf,image/*" style="display:none"
-                    onchange="PC.handleApproveWithCert(event, '${auditId}', '${orgId}')">
+                    class="file-cert-upload" data-audit-id="${auditId}" data-org-id="${orgId}">
                 </label>
                 <span id="cert-file-name-${orgId}" class="small muted">No file chosen</span>
-                <button class="btn btn-sm btn-ghost" onclick="PC.hideUploadCertStep('${orgId}')" style="margin-left:auto">Cancel</button>
+                <button class="btn btn-sm btn-ghost btn-cancel-approve" data-org-id="${orgId}" style="margin-left:auto">Cancel</button>
               </div>
             </div>
           </div>
@@ -346,12 +346,29 @@
               ${reviewPanelHtml}
             </div>
             <div class="flex" style="gap:8px; align-items:center; flex-shrink:0">
-              <button class="btn btn-ghost btn-sm" onclick="PC.toggleOrgSeats('${org._id}', ${org.seatsActive})">${seatBtnText}</button>
+              <button class="btn btn-ghost btn-sm btn-toggle-seats" data-org-id="${org._id}" data-seats-active="${org.seatsActive}">${seatBtnText}</button>
             </div>
           </div>
         </div>
       `;
     }).join("");
+
+    // Attach event listeners dynamically
+    document.querySelectorAll(".btn-approve").forEach(btn => {
+      btn.addEventListener("click", () => PC.showUploadCertStep(btn.dataset.orgId));
+    });
+    document.querySelectorAll(".btn-decline").forEach(btn => {
+      btn.addEventListener("click", () => PC.handleDecline(btn.dataset.auditId, btn.dataset.orgId));
+    });
+    document.querySelectorAll(".file-cert-upload").forEach(input => {
+      input.addEventListener("change", (e) => PC.handleApproveWithCert(e, input.dataset.auditId, input.dataset.orgId));
+    });
+    document.querySelectorAll(".btn-cancel-approve").forEach(btn => {
+      btn.addEventListener("click", () => PC.hideUploadCertStep(btn.dataset.orgId));
+    });
+    document.querySelectorAll(".btn-toggle-seats").forEach(btn => {
+      btn.addEventListener("click", () => PC.toggleOrgSeats(btn.dataset.orgId, btn.dataset.seatsActive === "true"));
+    });
   }
 
   /* ---------------- PC API handlers (attached to window.PC) ---------------- */
@@ -474,12 +491,10 @@
           findings: findings
         }
       });
-      alert("⚠️ Audit declined. Findings emailed to the organisation's HR.");
-      loadOrgs();
-    } catch (ex) {
-      alert("Decline failed: " + ex.message);
-      if (declineBtn) { declineBtn.disabled = false; declineBtn.textContent = "⚠️ Decline & Request Changes"; }
-    }
+      PC.alertModal("Evidence Declined", "HR has been notified to make changes.", [{ label: "OK", href: "javascript:window.location.reload()" }]);
+    } catch (e) {
+      PC.alertModal("Error", PC.esc(e.message));
+    }  if (declineBtn) { declineBtn.disabled = false; declineBtn.textContent = "⚠️ Decline & Request Changes"; }
   };
 
   /**
