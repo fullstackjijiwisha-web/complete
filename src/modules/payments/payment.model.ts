@@ -2,7 +2,7 @@ import { Schema, model, Types } from 'mongoose';
 
 export type PaymentType = 'seats' | 'audit';
 export type PaymentStatus = 'created' | 'paid' | 'failed';
-export type PaymentProvider = 'razorpay' | 'shopify';
+export type PaymentProvider = 'razorpay' | 'razorpay_qr' | 'shopify';
 
 export interface IPayment {
   orgId: Types.ObjectId;
@@ -22,7 +22,7 @@ const paymentSchema = new Schema<IPayment>(
   {
     orgId: { type: Schema.Types.ObjectId, ref: 'Organisation', required: true, index: true },
     type: { type: String, enum: ['seats', 'audit'], required: true },
-    provider: { type: String, enum: ['razorpay', 'shopify'], default: 'razorpay' },
+    provider: { type: String, enum: ['razorpay', 'razorpay_qr', 'shopify'], default: 'razorpay' },
     razorpayOrderId: { type: String, required: true, unique: true },
     amountPaise: { type: Number, required: true },
     status: { type: String, enum: ['created', 'paid', 'failed'], default: 'created' },

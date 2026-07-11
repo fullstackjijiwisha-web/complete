@@ -46,3 +46,19 @@ paymentRoutes.post(
   roleGuard('hr_admin'),
   controller.shopifyCheckout,
 );
+
+// Razorpay QR Code — creates a scannable UPI QR linked to the org's seat amount.
+paymentRoutes.post(
+  '/qr-code',
+  requireAuth,
+  roleGuard('hr_admin'),
+  controller.createQrCode,
+);
+
+// Poll whether a Razorpay QR payment has been captured yet.
+paymentRoutes.get(
+  '/qr-code/:qrId/status',
+  requireAuth,
+  roleGuard('hr_admin'),
+  controller.pollQrCode,
+);

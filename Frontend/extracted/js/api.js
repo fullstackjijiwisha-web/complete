@@ -434,32 +434,20 @@
               '</div>' +
             '</div>' +
             '<div class="sim-pay-fields hidden" id="form-upi-panel">' +
-              '<div class="sim-pay-qr-box">' +
-                '<svg width="110" height="110" viewBox="0 0 100 100" style="background:#fff; padding:6px; border:1px solid #ddd; border-radius:4px;">' +
-                  '<rect x="0" y="0" width="22" height="22" fill="#071f16" />' +
-                  '<rect x="2" y="2" width="18" height="18" fill="#fff" />' +
-                  '<rect x="6" y="6" width="10" height="10" fill="#071f16" />' +
-                  '<rect x="78" y="0" width="22" height="22" fill="#071f16" />' +
-                  '<rect x="80" y="2" width="18" height="18" fill="#fff" />' +
-                  '<rect x="84" y="6" width="10" height="10" fill="#071f16" />' +
-                  '<rect x="0" y="78" width="22" height="22" fill="#071f16" />' +
-                  '<rect x="2" y="78" width="18" height="18" fill="#fff" />' +
-                  '<rect x="6" y="82" width="10" height="10" fill="#071f16" />' +
-                  '<rect x="30" y="10" width="6" height="12" fill="#071f16" />' +
-                  '<rect x="45" y="15" width="12" height="6" fill="#071f16" />' +
-                  '<rect x="30" y="35" width="18" height="18" fill="#071f16" />' +
-                  '<rect x="60" y="45" width="24" height="12" fill="#071f16" />' +
-                  '<rect x="15" y="60" width="12" height="12" fill="#071f16" />' +
-                  '<rect x="50" y="75" width="18" height="18" fill="#071f16" />' +
-                  '<rect x="80" y="40" width="12" height="24" fill="#071f16" />' +
-                  '<rect x="40" y="60" width="12" height="6" fill="#071f16" />' +
-                  '<rect x="75" y="80" width="15" height="15" fill="#071f16" />' +
-                '</svg>' +
-                '<p class="small muted mt-1" style="font-size:0.72rem;">Scan with BHIM, GPay, PhonePe, or Paytm</p>' +
-              '</div>' +
-              '<div class="field">' +
-                '<label>Or enter UPI ID</label>' +
-                '<input type="text" id="sim-upi-id" placeholder="username@upi">' +
+              '<div class="sim-pay-qr-box" id="rzp-qr-box">' +
+                '<div id="rzp-qr-loading" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 0">' +
+                  '<div style="width:36px;height:36px;border:3px solid #dbeae2;border-top-color:var(--green-800);border-radius:50%;animation:spin 0.8s linear infinite"></div>' +
+                  '<p class="small muted">Generating QR…</p>' +
+                '</div>' +
+                '<div id="rzp-qr-img-wrap" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:8px">' +
+                  '<img id="rzp-qr-img" src="" alt="Razorpay UPI QR" style="width:180px;height:180px;border:2px solid #dbeae2;border-radius:8px;">' +
+                  '<p class="small muted" style="font-size:0.72rem">Scan with BHIM, GPay, PhonePe, or Paytm</p>' +
+                  '<p class="small" style="font-size:0.72rem;color:var(--green-800);font-weight:600" id="rzp-qr-amount"></p>' +
+                  '<p class="small muted" style="font-size:0.69rem" id="rzp-qr-status">Waiting for payment…</p>' +
+                '</div>' +
+                '<div id="rzp-qr-error" class="hidden" style="color:var(--orange-700);font-size:0.82rem;text-align:center;padding:16px 0">' +
+                  '⚠️ Could not generate QR code. Please use card payment.' +
+                '</div>' +
               '</div>' +
             '</div>' +
             '<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">' +
@@ -487,19 +475,76 @@
     const cardExpiry = m.querySelector("#sim-card-expiry");
     const cardCvv = m.querySelector("#sim-card-cvv");
 
-    closeBtn.addEventListener("click", function () { m.remove(); });
+    closeBtn.addEventListener("click", function () { clearQrPoll(); m.remove(); });
 
     tabCard.addEventListener("click", function () {
       tabCard.classList.add("active");
       tabUpi.classList.remove("active");
       panelCard.classList.remove("hidden");
       panelUpi.classList.add("hidden");
+      clearQrPoll();
     });
-    tabUpi.addEventListener("click", function () {
+
+    var rzpQrId = null;
+    var qrPollTimer = null;
+
+    function clearQrPoll() {
+      if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
+    }
+
+    function startQrPoll() {
+      clearQrPoll();
+      qrPollTimer = setInterval(async function () {
+        if (!rzpQrId) return;
+        try {
+          var result = await PC.api("/payments/qr-code/" + rzpQrId + "/status");
+          if (result.paid) {
+            clearQrPoll();
+            m.remove();
+            alertModal("✓ Payment received via UPI",
+              "QR scan payment verified — your assessment seats are now activated!",
+              [{ label: "Open Dashboard", href: "dashboard.html" }]);
+            if (onPaid) onPaid();
+          } else {
+            var statusEl = document.getElementById("rzp-qr-status");
+            if (statusEl) statusEl.textContent = "Waiting for payment… (" + new Date().toLocaleTimeString() + ")";
+          }
+        } catch (e) { /* poll errors are silent */ }
+      }, 5000);
+    }
+
+    tabUpi.addEventListener("click", async function () {
       tabUpi.classList.add("active");
       tabCard.classList.remove("active");
       panelUpi.classList.remove("hidden");
       panelCard.classList.add("hidden");
+
+      // Only generate QR once per modal open
+      if (rzpQrId) return;
+
+      var qrLoading = document.getElementById("rzp-qr-loading");
+      var qrImgWrap = document.getElementById("rzp-qr-img-wrap");
+      var qrImg = document.getElementById("rzp-qr-img");
+      var qrAmount = document.getElementById("rzp-qr-amount");
+      var qrError = document.getElementById("rzp-qr-error");
+
+      qrLoading.style.display = "flex";
+      qrImgWrap.classList.add("hidden");
+      qrError.classList.add("hidden");
+
+      try {
+        var qrData = await PC.api("/payments/qr-code", { method: "POST", body: {} });
+        rzpQrId = qrData.qrId;
+        var amtRupees = (qrData.amountPaise / 100).toLocaleString("en-IN");
+        qrImg.src = qrData.imageUrl;
+        qrAmount.textContent = "Amount: ₹" + amtRupees;
+        qrLoading.style.display = "none";
+        qrImgWrap.classList.remove("hidden");
+        startQrPoll();
+      } catch (e) {
+        qrLoading.style.display = "none";
+        qrError.classList.remove("hidden");
+      }
     });
 
     cardNum.addEventListener("input", function (e) {

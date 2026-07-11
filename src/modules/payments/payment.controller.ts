@@ -296,3 +296,110 @@ export const shopifyWebhook: RequestHandler = async (req, res) => {
   res.json({ success: true, data: { received: true, matched: true } });
 };
 
+/* ─────────────────────────────────────────────────────────────
+   Razorpay QR Code — generates a scannable UPI QR for the org's
+   current seat amount. The QR is single-use / fixed-amount so
+   Razorpay credits the payment automatically.
+   ───────────────────────────────────────────────────────────── */
+export const createQrCode: RequestHandler = async (req, res) => {
+  if (!razorpay) {
+    throw new ApiError(503, 'PAYMENTS_NOT_CONFIGURED', 'Payment gateway is not configured');
+  }
+  const org = await Organisation.findOne({ _id: authOrgId(req), isDeleted: false });
+  if (!org) throw ApiError.notFound();
+
+  const amountPaise = org.headcount * seatPricePaisePerEmployee(org.headcount);
+
+  if (amountPaise < 100) {
+    throw ApiError.badRequest('Order amount must be at least ₹1');
+  }
+
+  // Razorpay QR Code API — creates a one-time scannable UPI QR
+  // https://razorpay.com/docs/payments/qr-codes/
+  let qr: {
+    id: string;
+    image_url: string;
+    [key: string]: unknown;
+  };
+  try {
+    qr = await (razorpay as unknown as {
+      qrCode: {
+        create: (opts: Record<string, unknown>) => Promise<{ id: string; image_url: string }>;
+      };
+    }).qrCode.create({
+      type: 'upi_qr',
+      name: `${org.name} — POSH Seats`,
+      usage: 'single_use',
+      fixed_amount: true,
+      payment_amount: amountPaise,
+      description: `POSH Compass seat licence for ${org.headcount} employees`,
+      customer_id: undefined,
+      close_by: Math.floor(Date.now() / 1000) + 30 * 60, // 30 min expiry
+    });
+  } catch (err) {
+    logger.error('Razorpay QR Code creation failed', { message: (err as Error).message });
+    throw new ApiError(500, 'INTERNAL_ERROR', 'Could not create QR Code');
+  }
+
+  // Persist a Payment record so the webhook can credit the org on scan
+  await Payment.create({
+    orgId: org._id,
+    type: 'seats',
+    razorpayOrderId: qr.id,          // QR id is used as the order reference
+    amountPaise,
+    status: 'created',
+    provider: 'razorpay_qr',
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      qrId: qr.id,
+      imageUrl: qr.image_url,
+      amountPaise,
+      currency: 'INR',
+    },
+  });
+};
+
+/* Poll whether a QR code payment has been captured */
+export const pollQrCode: RequestHandler = async (req, res) => {
+  if (!razorpay) {
+    throw new ApiError(503, 'PAYMENTS_NOT_CONFIGURED', 'Payment gateway is not configured');
+  }
+
+  const { qrId } = req.params as { qrId: string };
+  const orgId = authOrgId(req);
+
+  // Check our Payment record first (webhook may have already flipped it)
+  const payment = await Payment.findOne({ razorpayOrderId: qrId, orgId });
+  if (!payment) throw ApiError.notFound();
+
+  if (payment.status === 'paid') {
+    res.json({ success: true, data: { paid: true } });
+    return;
+  }
+
+  // Also query Razorpay directly in case the webhook hasn't arrived yet
+  try {
+    const payments = await (razorpay as unknown as {
+      qrCode: {
+        fetchAllPayments: (id: string, opts: Record<string, unknown>) => Promise<{ count: number; items: Array<{ status: string }> }>;
+      };
+    }).qrCode.fetchAllPayments(qrId, {});
+    
+    const captured = payments.items?.some((p) => p.status === 'captured');
+    if (captured) {
+      // Mark as paid and activate seats
+      await Payment.updateOne({ _id: payment._id }, { $set: { status: 'paid', webhookVerifiedAt: new Date() } });
+      await Organisation.updateOne({ _id: orgId }, { $set: { seatsActive: true } });
+      await logAudit('payment.seats_activated', 'Organisation', orgId as string, undefined, { source: 'razorpay_qr', qrId });
+      res.json({ success: true, data: { paid: true } });
+      return;
+    }
+  } catch (err) {
+    logger.warn('Razorpay QR poll failed', { message: (err as Error).message });
+  }
+
+  res.json({ success: true, data: { paid: false } });
+};
