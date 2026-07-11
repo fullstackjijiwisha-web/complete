@@ -276,7 +276,7 @@
       }
 
       const attachedCertLink = org.compliance.customCertificateFilename
-        ? `<p class="small text-green mt-1">✓ Attached Cert: <a href="#" onclick="PC.downloadCustomCertLocal('${PC.esc(org.compliance.customCertificateFilename)}', '${org.compliance.customCertificateData}'); return false;" style="font-weight:600">${PC.esc(org.compliance.customCertificateFilename)}</a></p>`
+        ? `<p class="small text-green mt-1">✓ Attached Cert: <a href="#" id="cert-dl-${org._id}" data-filename="${PC.esc(org.compliance.customCertificateFilename)}" data-b64="${PC.esc(org.compliance.customCertificateData || '')}" onclick="PC.downloadCustomCertLocal(this.dataset.filename, this.dataset.b64); return false;" style="font-weight:600">${PC.esc(org.compliance.customCertificateFilename)}</a></p>`
         : "";
 
       return `
@@ -289,16 +289,8 @@
               ${evidencePackHtml}
               ${reviewPanelHtml}
             </div>
-            <div class="flex" style="gap:8px; align-items:center;">
+            <div class="flex" style="gap:8px; align-items:center; flex-wrap:wrap;">
               <button class="btn btn-ghost btn-sm" onclick="PC.toggleOrgSeats('${org._id}', ${org.seatsActive})">${seatBtnText}</button>
-              
-              <!-- File Upload Form -->
-              <div style="border-left: 1px solid var(--line); padding-left: 10px;">
-                <label class="btn btn-sm btn-ghost" style="cursor:pointer; margin:0">
-                  📁 Upload Custom Cert
-                  <input type="file" accept="application/pdf" style="display:none" onchange="PC.handleCustomCertUpload(event, '${org._id}')">
-                </label>
-              </div>
             </div>
           </div>
         </div>

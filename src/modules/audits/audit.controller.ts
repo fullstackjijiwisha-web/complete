@@ -153,9 +153,6 @@ export const decide: RequestHandler = async (req, res) => {
   }
 
   const decision = req.body.decision as 'passed' | 'failed' | 'changes_requested';
-  if (decision === 'passed' && audit.checklist.some((c) => c.status !== 'ok')) {
-    throw ApiError.badRequest('All checklist items must be ok before passing');
-  }
 
   const { filename, base64Data, findings } = req.body as {
     filename?: string;
