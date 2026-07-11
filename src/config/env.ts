@@ -75,7 +75,7 @@ const envSchema = z.object({
   SHOPIFY_VARIANT_TIER4: z.string().optional(),
   SHOPIFY_WEBHOOK_SECRET: z.string().optional(),
 
-  CERT_VERIFY_BASE_URL: z.string().default('http://localhost:5173/verify'),
+  CERT_VERIFY_BASE_URL: z.string().optional(),
   CERT_SIGNING_SECRET: z.string().min(32).optional(),
 
   PUBLIC_STATS_CACHE_TTL_SEC: z.coerce.number().positive().default(600),
@@ -91,17 +91,22 @@ if (!parsed.success) {
 const rawData = parsed.data;
 
 // Auto-resolve production Vercel hostnames if environment variables are left at localhost defaults
-if (process.env.VERCEL_URL) {
-  const vercelHost = `https://${process.env.VERCEL_URL}`;
+const vercelDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+if (vercelDomain) {
+  const vercelHost = `https://${vercelDomain}`;
   if (rawData.CLIENT_URL.includes('localhost')) {
     rawData.CLIENT_URL = vercelHost;
   }
   if (rawData.CORS_ORIGINS.includes('localhost')) {
     rawData.CORS_ORIGINS = vercelHost;
   }
-  if (rawData.CERT_VERIFY_BASE_URL.includes('localhost')) {
-    rawData.CERT_VERIFY_BASE_URL = `${vercelHost}/verify`;
-  }
+}
+
+// Derive CERT_VERIFY_BASE_URL from CLIENT_URL if not explicitly set
+if (!rawData.CERT_VERIFY_BASE_URL) {
+  rawData.CERT_VERIFY_BASE_URL = `${rawData.CLIENT_URL}/verify`;
+} else if (rawData.CERT_VERIFY_BASE_URL.includes('localhost') && vercelDomain) {
+  rawData.CERT_VERIFY_BASE_URL = `https://${vercelDomain}/verify`;
 }
 
 export const env = rawData;
