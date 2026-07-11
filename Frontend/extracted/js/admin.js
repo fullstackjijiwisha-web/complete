@@ -37,16 +37,13 @@
     document.getElementById("q-field-type").addEventListener("change", handleTypeChange);
     document.getElementById("question-form").addEventListener("submit", handleQuestionSave);
 
-    // Wire up certificate verification
-    document.getElementById("btn-verify-search").addEventListener("click", handleCertSearch);
-
     // Load initial tab
     switchTab("questions");
   }
 
   function switchTab(tab) {
     currentTab = tab;
-    ["questions", "verify", "orgs"].forEach(t => {
+    ["questions", "orgs"].forEach(t => {
       document.getElementById("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "questions") loadQuestions();
@@ -209,36 +206,6 @@
     }
   }
 
-  /* ---------------- Certificate Verification & Revocation ---------------- */
-  async function handleCertSearch() {
-    const input = document.getElementById("verify-search-input").value.trim();
-    const resultEl = document.getElementById("verify-search-result");
-    if (!input) return;
-
-    resultEl.innerHTML = '<p class="small muted">Searching...</p>';
-
-    try {
-      const d = await PC.api("/public/verify/" + encodeURIComponent(input));
-      const revokeBtnText = d.revoked ? "Restore Certificate" : "Revoke Certificate";
-      const badgeStyle = d.status === "valid" ? "background:#dbeae2; color:var(--green-900)" : "background:#fbeee9; color:var(--orange-700)";
-      
-      resultEl.innerHTML = `
-        <div class="card mt-2" style="border-left:4px solid var(--green-900); padding:16px;">
-          <h3 class="h-sm">${d.type === "compliance" ? "Organisational Compliance" : "Individual Assessment"}</h3>
-          <div class="rows mt-1">
-            <div class="row"><span class="k">ID</span><span class="v mono">${PC.esc(d.certId)}</span></div>
-            <div class="row"><span class="k">Holder</span><span class="v">${PC.esc(d.holderName || "N/A")}</span></div>
-            <div class="row"><span class="k">Organisation</span><span class="v">${PC.esc(d.organisation)}</span></div>
-            <div class="row"><span class="k">Status</span><span class="v"><span class="badge" style="${badgeStyle}; font-weight:600">${PC.esc(d.status.toUpperCase())}</span></span></div>
-            <div class="row"><span class="k">Issued</span><span class="v">${PC.esc(d.issuedAt)}</span></div>
-          </div>
-          <!-- Revocation controls can be added via backend update patch route if required -->
-        </div>
-      `;
-    } catch (e) {
-      resultEl.innerHTML = '<p style="color:var(--orange-700)">Certificate not found or invalid format.</p>';
-    }
-  }
 
   /* ---------------- Organisations & Custom Cert Upload ---------------- */
   async function loadOrgs() {
