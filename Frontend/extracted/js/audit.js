@@ -163,7 +163,7 @@
       }
 
       body =
-        '<p class="small muted">Register and upload each required POSH compliance record. Each uploaded file is securely saved in the evidence pack.</p>' +
+        '<p class="small muted">Register and upload your POSH compliance records. <strong>Please combine all required files into one single PDF document before uploading.</strong> Each uploaded file is securely saved in the evidence pack.</p>' +
         declineNote +
         (rows ? '<ul class="doc-list mt-2">' + rows + "</ul>" : '<p class="small muted mt-2">No documents registered yet.</p>') +
         (status !== "locked"

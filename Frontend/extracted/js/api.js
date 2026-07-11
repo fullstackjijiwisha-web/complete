@@ -738,6 +738,23 @@
     }
   };
 
+  PC.viewFile = async function (path) {
+    try {
+      let res = await rawFetch(path);
+      if (res.status === 401 && hasSession()) {
+        const renewed = await refreshAccessToken();
+        if (renewed) res = await rawFetch(path);
+      }
+      if (!res.ok) throw new Error("View failed with status " + res.status);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000); // Revoke after a minute
+    } catch (e) {
+      alertModal("View failed", escapeH(e.message));
+    }
+  };
+
   /* ---------------- session-aware nav ---------------- */
   function renderSessionUi(user) {
     const cta = document.querySelector(".nav-cta");
