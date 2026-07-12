@@ -38,6 +38,22 @@
     await refresh();
   }
 
+  // CSP blocks inline onclick attributes (script-src-attr 'none') — delegate
+  // from root once, since render() replaces root's children but not root itself.
+  root.addEventListener("click", function (e) {
+    const dlBtn = e.target.closest(".audit-dl-doc-btn");
+    if (dlBtn) {
+      e.preventDefault();
+      PC.downloadFile(dlBtn.dataset.path, dlBtn.dataset.filename);
+      return;
+    }
+    const printBtn = e.target.closest(".audit-print-cert-btn");
+    if (printBtn) {
+      window.print();
+      return;
+    }
+  });
+
   async function refresh() {
     try {
       dash = await PC.api("/orgs/me/dashboard");
@@ -152,7 +168,7 @@
         rows +=
           "<li><span data-icon='doc' data-size='17' data-color='#0e7a3d'></span>" +
           "<span><strong>" + PC.esc(d.name) + "</strong><br><span class='small muted'>" + fmtDateTime(d.uploadedAt) + "</span></span>" +
-          `<span class="ref"><a class="badge badge-good" href="#" onclick="PC.downloadFile('/audits/${audit._id || audit.id}/documents/${i}', '${PC.esc(d.name)}'); return false;">✓ download</a></span></li>`;
+          `<span class="ref"><a class="badge badge-good audit-dl-doc-btn" href="#" data-path="/audits/${audit._id || audit.id}/documents/${i}" data-filename="${PC.esc(d.name)}">✓ download</a></span></li>`;
       });
       let declineNote = "";
       if (audit.status === "changes_requested" && audit.findings) {
@@ -253,7 +269,7 @@
         '<div class="c-ref">' + PC.esc(comp.certificateId || "") + " · Valid till " + (comp.validTill ? fmtDate(comp.validTill) : "—") + "</div>" +
         '<div class="seal">Audited<br>&amp;<br>Verified</div>' +
         "</div>" +
-        '<div class="flex mt-2 no-print"><button class="btn btn-orange" onclick="window.print()">Print / Save Certificate</button>' +
+        '<div class="flex mt-2 no-print"><button class="btn btn-orange audit-print-cert-btn">Print / Save Certificate</button>' +
         '<a class="btn btn-ghost" href="/verify/' + PC.esc(comp.certificateId || "") + '" target="_blank" rel="noopener">Public verification ↗</a></div>';
     } else if (audit && (audit.status === "failed" || audit.status === "changes_requested")) {
       body =
