@@ -49,9 +49,15 @@
     }
     const printBtn = e.target.closest(".audit-print-cert-btn");
     if (printBtn) {
+      // Print only the certificate — see the @media print rule in audit.html,
+      // which isolates #audit-certificate while this class is on <body>.
+      document.body.classList.add("print-cert");
       window.print();
       return;
     }
+  });
+  window.addEventListener("afterprint", function () {
+    document.body.classList.remove("print-cert");
   });
 
   async function refresh() {
@@ -260,7 +266,7 @@
         (audit.decisionAt ? evRow("Decided", fmtDateTime(audit.decisionAt)) : "") +
         (audit.findings ? evRow("Findings", PC.esc(audit.findings)) : "") +
         "</div></div>" +
-        '<div class="certificate mt-3">' +
+        '<div class="certificate mt-3" id="audit-certificate">' +
         '<div class="c-brand">✦ POSH COMPASS × JIJIWISHA SOCIETY</div>' +
         "<h2>POSH Compliance Certificate</h2>" +
         '<p class="small muted">This is to certify that</p>' +
