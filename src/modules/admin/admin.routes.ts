@@ -43,6 +43,7 @@ const questionSchema = z.object({
 adminRoutes.get('/questions', controller.listQuestions);
 adminRoutes.post('/questions', validate(questionSchema), controller.createQuestion);
 adminRoutes.patch('/questions/:id', validate(questionSchema.partial()), controller.updateQuestion);
+adminRoutes.delete('/questions/:id', controller.deleteQuestion);
 
 adminRoutes.get('/orgs', controller.listOrgs);
 adminRoutes.patch(
