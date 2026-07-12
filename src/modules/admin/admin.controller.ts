@@ -100,14 +100,14 @@ export const listOrgs: RequestHandler = async (req, res) => {
         ...org.toObject(),
         currentAudit: audit
           ? {
-              id: audit._id,
-              status: audit.status,
-              documents: audit.documents.map((d, index) => ({
-                name: d.name,
-                uploadedAt: d.uploadedAt,
-                downloadUrl: `/api/v1/audits/${audit._id}/documents/${index}`,
-              })),
-            }
+            id: audit._id,
+            status: audit.status,
+            documents: audit.documents.map((d, index) => ({
+              name: d.name,
+              uploadedAt: d.uploadedAt,
+              downloadUrl: `/api/v1/audits/${audit._id}/documents/${index}`,
+            })),
+          }
           : null,
       };
     }),
@@ -262,17 +262,19 @@ export const downloadOrgCertificate: RequestHandler = async (req, res) => {
   }
 
   const fileBuffer = Buffer.from(org.compliance.customCertificateData, 'base64');
-  
+
   let contentType = 'application/octet-stream';
-  const lowerName = org.compliance.customCertificateFilename.toLowerCase();
-  if (lowerName.endsWith('.pdf')) contentType = 'application/pdf';
-  else if (lowerName.endsWith('.png')) contentType = 'image/png';
-  else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) contentType = 'image/jpeg';
-  else if (lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) contentType = 'application/msword';
-  else if (lowerName.endsWith('.xls') || lowerName.endsWith('.xlsx')) contentType = 'application/vnd.ms-excel';
-  
+  let ext = '';
+  const b64 = org.compliance.customCertificateData;
+  if (b64.startsWith('JVBERi0')) { contentType = 'application/pdf'; ext = '.pdf'; }
+  else if (b64.startsWith('iVBORw0KGgo')) { contentType = 'image/png'; ext = '.png'; }
+  else if (b64.startsWith('/9j/')) { contentType = 'image/jpeg'; ext = '.jpg'; }
+
+  let filename = org.compliance.customCertificateFilename;
+  if (ext && !filename.toLowerCase().includes('.')) filename += ext;
+
   res.setHeader('Content-Type', contentType);
-  res.setHeader('Content-Disposition', `inline; filename="${org.compliance.customCertificateFilename}"`);
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
   res.send(fileBuffer);
 };
 
@@ -286,16 +288,17 @@ export const downloadOrgAuditDocument: RequestHandler = async (req, res) => {
   if (!doc || !doc.base64Data) throw ApiError.notFound('Document not found');
 
   const fileBuffer = Buffer.from(doc.base64Data, 'base64');
-  
+
   let contentType = 'application/octet-stream';
-  const lowerName = doc.name.toLowerCase();
-  if (lowerName.endsWith('.pdf')) contentType = 'application/pdf';
-  else if (lowerName.endsWith('.png')) contentType = 'image/png';
-  else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) contentType = 'image/jpeg';
-  else if (lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) contentType = 'application/msword';
-  else if (lowerName.endsWith('.xls') || lowerName.endsWith('.xlsx')) contentType = 'application/vnd.ms-excel';
+  let ext = '';
+  if (doc.base64Data.startsWith('JVBERi0')) { contentType = 'application/pdf'; ext = '.pdf'; }
+  else if (doc.base64Data.startsWith('iVBORw0KGgo')) { contentType = 'image/png'; ext = '.png'; }
+  else if (doc.base64Data.startsWith('/9j/')) { contentType = 'image/jpeg'; ext = '.jpg'; }
+
+  let filename = doc.name;
+  if (ext && !filename.toLowerCase().includes('.')) filename += ext;
 
   res.setHeader('Content-Type', contentType);
-  res.setHeader('Content-Disposition', `inline; filename="${doc.name}"`);
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
   res.send(fileBuffer);
 };
