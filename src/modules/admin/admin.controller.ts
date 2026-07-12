@@ -69,7 +69,16 @@ export const updateQuestion: RequestHandler = async (req, res) => {
 
   const contentKeys = ['body', 'options', 'blanks', 'nodes'];
   const touchesContent = contentKeys.some((k) => req.body[k] !== undefined);
+  
+  if (req.body.type) {
+    if (req.body.type === 'fib') { question.options = undefined; question.nodes = undefined; }
+    else if (req.body.type === 'simulation') { question.options = undefined; question.blanks = undefined; }
+    else { question.blanks = undefined; question.nodes = undefined; }
+  }
+  
   Object.assign(question, req.body);
+  assertQuestionShape(question.toObject());
+  
   if (touchesContent) question.version += 1;
   await question.save();
   res.json({ success: true, data: question });
