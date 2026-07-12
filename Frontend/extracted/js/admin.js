@@ -29,13 +29,36 @@
       });
     });
 
-    // Wire up question creation
     document.getElementById("btn-add-question").addEventListener("click", () => openQuestionModal());
     document.getElementById("question-modal-close").addEventListener("click", closeQuestionModal);
     document.getElementById("btn-add-option-row").addEventListener("click", () => addOptionRow("", 0));
     document.getElementById("btn-add-blank-row").addEventListener("click", () => addBlankRow([]));
     document.getElementById("q-field-type").addEventListener("change", handleTypeChange);
     document.getElementById("question-form").addEventListener("submit", handleQuestionSave);
+
+    // Event delegation for dynamically generated question buttons
+    document.addEventListener("click", function(e) {
+      const editBtn = e.target.closest(".admin-edit-q-btn");
+      if (editBtn) {
+        PC.openEditQuestion(editBtn.dataset.id);
+        return;
+      }
+      const deleteBtn = e.target.closest(".admin-delete-q-btn");
+      if (deleteBtn) {
+        PC.deleteQuestion(deleteBtn.dataset.id);
+        return;
+      }
+      const rmOptBtn = e.target.closest(".admin-remove-opt-btn");
+      if (rmOptBtn) {
+        document.getElementById(rmOptBtn.dataset.target).remove();
+        return;
+      }
+      const rmBlankBtn = e.target.closest(".admin-remove-blank-btn");
+      if (rmBlankBtn) {
+        document.getElementById(rmBlankBtn.dataset.target).remove();
+        return;
+      }
+    });
 
     // Load initial tab
     switchTab("questions");
@@ -70,8 +93,8 @@
       return;
     }
     container.innerHTML = questions.map(q => {
-      const editBtn = `<button class="btn btn-ghost btn-sm" onclick="PC.openEditQuestion('${q._id}')">Edit</button>`;
-      const deleteBtn = `<button class="btn btn-ghost btn-sm" onclick="PC.deleteQuestion('${q._id}')" style="color:var(--orange-700)">Delete</button>`;
+      const editBtn = `<button class="btn btn-ghost btn-sm admin-edit-q-btn" data-id="${q._id}">Edit</button>`;
+      const deleteBtn = `<button class="btn btn-ghost btn-sm admin-delete-q-btn" data-id="${q._id}" style="color:var(--orange-700)">Delete</button>`;
       return `
         <div class="card question-list-item" style="padding:16px;">
           <div class="flex spread">
@@ -160,7 +183,7 @@
     row.innerHTML = `
       <input type="text" placeholder="Option text" value="${PC.esc(text)}" class="q-opt-text" style="flex:1" required>
       <input type="number" step="0.1" min="0" max="1" placeholder="Weight" value="${weight}" class="q-opt-weight" style="width:80px" required>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('q-opt-row-${id}').remove()" style="color:var(--orange-700)">✕</button>
+      <button type="button" class="btn btn-ghost btn-sm admin-remove-opt-btn" data-target="q-opt-row-${id}" style="color:var(--orange-700)">✕</button>
     `;
     list.appendChild(row);
   }
@@ -174,7 +197,7 @@
     row.id = `q-blank-row-${id}`;
     row.innerHTML = `
       <input type="text" placeholder="Accepted answers (comma separated)" value="${PC.esc(answers.join(", "))}" class="q-blank-text" style="flex:1" required>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('q-blank-row-${id}').remove()" style="color:var(--orange-700)">✕</button>
+      <button type="button" class="btn btn-ghost btn-sm admin-remove-blank-btn" data-target="q-blank-row-${id}" style="color:var(--orange-700)">✕</button>
     `;
     list.appendChild(row);
   }
