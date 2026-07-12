@@ -178,20 +178,26 @@
   }
 
   function wireCertificate(c, user, orgName, passPct) {
+    // One data object drives both the on-screen branded certificate and the
+    // print output (Jijiwisha template — PC.buildCertificateHtml in api.js).
+    const certData = {
+      title: "Certificate of Completion",
+      name: PC.esc(user.name),
+      bodyHtml:
+        "has successfully completed the POSH Assessment<br>with a score of <strong>" +
+        c.score + "%</strong> (threshold: " + passPct + "%)",
+      subLine: PC.esc(orgName) + " · Assessed on the POSH Compass platform",
+      refLine:
+        "Certificate ID: " + PC.esc(c.certId) +
+        " · Cycle: " + PC.esc(c.cycle) +
+        " · Issued: " + fmtDate(c.issuedAt),
+    };
+
     const modal = document.getElementById("cert-modal");
     modal.innerHTML =
       '<div class="modal wide">' +
       '<button class="close" data-close-cert aria-label="Close">✕</button>' +
-      '<div class="certificate">' +
-      '<div class="c-brand">✦ POSH COMPASS</div>' +
-      "<h2>Certificate of Completion</h2>" +
-      '<p class="small muted">This is to certify that</p>' +
-      '<div class="c-name">' + PC.esc(user.name) + "</div>" +
-      '<p class="c-score">has successfully completed the POSH Assessment<br>with a score of <strong>' + c.score + "%</strong> (threshold: " + passPct + "%)</p>" +
-      '<p class="small muted">' + PC.esc(orgName) + " · Assessed on the POSH Compass platform</p>" +
-      '<div class="c-ref">Certificate ID: ' + PC.esc(c.certId) + " &nbsp;·&nbsp; Cycle: " + PC.esc(c.cycle) + " &nbsp;·&nbsp; Issued: " + fmtDate(c.issuedAt) + "</div>" +
-      '<div class="seal">Verified<br>' + passPct + "%+<br>Score</div>" +
-      "</div>" +
+      PC.buildCertificateHtml(certData) +
       '<div class="flex mt-3 no-print" style="justify-content:center">' +
       '<button class="btn btn-orange" id="btn-print-cert">Print / Save as PDF</button>' +
       '<span class="small muted">Anyone can verify this certificate at <span class="mono">' + PC.esc(c.verifyUrl) + "</span></span>" +
@@ -202,18 +208,7 @@
       if (e.target === modal || e.target.closest("[data-close-cert]")) modal.classList.remove("open");
     });
     document.getElementById("btn-print-cert").addEventListener("click", function () {
-      PC.printCertificate({
-        title: "Certificate of Completion",
-        name: PC.esc(user.name),
-        bodyHtml:
-          "has successfully completed the POSH Assessment<br>with a score of <strong>" +
-          c.score + "%</strong> (threshold: " + passPct + "%)",
-        subLine: PC.esc(orgName) + " · Assessed on the POSH Compass platform",
-        refLine:
-          "Certificate ID: " + PC.esc(c.certId) +
-          " · Cycle: " + PC.esc(c.cycle) +
-          " · Issued: " + fmtDate(c.issuedAt),
-      });
+      PC.printCertificate(certData);
     });
   }
 

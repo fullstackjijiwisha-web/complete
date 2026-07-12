@@ -49,20 +49,26 @@
     }
     const printBtn = e.target.closest(".audit-print-cert-btn");
     if (printBtn) {
-      const comp = dash.compliance;
-      PC.printCertificate({
-        title: "POSH Compliance Certificate",
-        name: PC.esc(dash.org.name),
-        bodyHtml:
-          "has been audited and found compliant with the requirements of the<br>" +
-          "Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013",
-        refLine:
-          PC.esc(comp.certificateId || "") +
-          " · Valid till " + (comp.validTill ? fmtDate(comp.validTill) : "—"),
-      });
+      PC.printCertificate(orgCertData());
       return;
     }
   });
+
+  // Data for the branded org compliance certificate — one source for both the
+  // on-screen render (stage 5) and printing, so they can never drift apart.
+  function orgCertData() {
+    const comp = dash.compliance;
+    return {
+      title: "POSH Compliance Certificate",
+      name: PC.esc(dash.org.name),
+      bodyHtml:
+        "has been audited and found compliant with the requirements of the<br>" +
+        "Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013",
+      refLine:
+        PC.esc(comp.certificateId || "") +
+        " · Valid till " + (comp.validTill ? fmtDate(comp.validTill) : "—"),
+    };
+  }
 
   async function refresh() {
     try {
@@ -270,15 +276,7 @@
         (audit.decisionAt ? evRow("Decided", fmtDateTime(audit.decisionAt)) : "") +
         (audit.findings ? evRow("Findings", PC.esc(audit.findings)) : "") +
         "</div></div>" +
-        '<div class="certificate mt-3">' +
-        '<div class="c-brand">✦ POSH COMPASS × JIJIWISHA SOCIETY</div>' +
-        "<h2>POSH Compliance Certificate</h2>" +
-        '<p class="small muted">This is to certify that</p>' +
-        '<div class="c-name">' + PC.esc(dash.org.name) + "</div>" +
-        '<p class="c-score">has been audited and found compliant with the requirements of the<br>Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013</p>' +
-        '<div class="c-ref">' + PC.esc(comp.certificateId || "") + " · Valid till " + (comp.validTill ? fmtDate(comp.validTill) : "—") + "</div>" +
-        '<div class="seal">Audited<br>&amp;<br>Verified</div>' +
-        "</div>" +
+        '<div class="mt-3">' + PC.buildCertificateHtml(orgCertData()) + "</div>" +
         '<div class="flex mt-2 no-print"><button class="btn btn-orange audit-print-cert-btn">Print / Save Certificate</button>' +
         '<a class="btn btn-ghost" href="/verify/' + PC.esc(comp.certificateId || "") + '" target="_blank" rel="noopener">Public verification ↗</a></div>';
     } else if (audit && (audit.status === "failed" || audit.status === "changes_requested")) {

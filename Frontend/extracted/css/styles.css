@@ -996,12 +996,14 @@ details.data-view .data-table { min-width: 0; }
   margin-bottom: 12px;
 }
 
-/* ---------- Branded certificate print template (Jijiwisha Society) ----------
-   Filled by PC.printCertificate (js/api.js) into #print-cert-root, a direct
-   child of <body>. Hidden on screen; during print, every OTHER body child is
-   display:none'd so exactly one landscape page comes out. Brand colors match
-   the official Jijiwisha slide template (green angled header band, blue+green
-   footer stripes, registration details above the stripes). */
+/* ---------- Branded certificate template (Jijiwisha Society) ----------
+   Built by PC.buildCertificateHtml (js/api.js). Shown inline on the audit
+   page (stage 5) and in the employee certificate modal, and printed via
+   PC.printCertificate into #print-cert-root, a direct child of <body>:
+   during print every OTHER body child is display:none'd so exactly one
+   landscape page comes out. Brand colors match the official Jijiwisha slide
+   template (green angled header band, tree logo top-right, blue+green footer
+   stripes, registration details above the stripes). */
 #print-cert-root { display: none; }
 
 .jiji-cert {
@@ -1009,10 +1011,13 @@ details.data-view .data-table { min-width: 0; }
   --jc-green-light: #6cbe45;
   --jc-blue: #2a56a5;
   position: relative;
-  height: 100%;
   background: #fff;
   display: flex;
   flex-direction: column;
+  /* On screen it keeps the same A4-landscape shape it prints in; the print
+     block below switches to full page height instead. */
+  aspect-ratio: 297 / 210;
+  border: 1px solid var(--line);
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -1049,4 +1054,5 @@ details.data-view .data-table { min-width: 0; }
   body.print-cert-mode { margin: 0 !important; }
   body.print-cert-mode > :not(#print-cert-root) { display: none !important; }
   body.print-cert-mode #print-cert-root { display: block !important; height: 100vh; overflow: hidden; }
+  body.print-cert-mode #print-cert-root .jiji-cert { aspect-ratio: auto; height: 100%; border: none; }
 }

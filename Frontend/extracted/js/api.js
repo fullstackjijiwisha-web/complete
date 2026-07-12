@@ -762,26 +762,18 @@
     }
   };
 
-  /* Branded certificate printing (Jijiwisha Society template) — shared by the
-     employee and audit certificates. Renders into #print-cert-root, a direct
-     child of <body>, and hides every other body child with display:none while
-     printing. display (not visibility) is essential: visibility:hidden keeps
-     layout space and yields blank pages before deeply-nested content.
-     Callers pass PRE-ESCAPED strings (use PC.esc); bodyHtml/refLine may
-     contain markup. Template styles: styles.css ".jiji-cert". */
-  PC.printCertificate = function (o) {
-    let root = document.getElementById("print-cert-root");
-    if (!root) {
-      root = document.createElement("div");
-      root.id = "print-cert-root";
-      document.body.appendChild(root);
-    }
-    root.innerHTML =
+  /* Branded certificate (Jijiwisha Society template) — one builder shared by
+     the on-screen certificate views (audit stage 5, employee modal) and by
+     printing, so what the user sees is exactly what prints. Callers pass
+     PRE-ESCAPED strings (use PC.esc); bodyHtml/refLine may contain markup.
+     Template styles: styles.css ".jiji-cert". */
+  PC.buildCertificateHtml = function (o) {
+    return (
       '<div class="jiji-cert">' +
       '<div class="jc-head">' +
       '<div class="jc-accent"></div>' +
       '<div class="jc-band"><span class="jc-dot"></span><span class="jc-brandname">JIJIWISHA&nbsp;&nbsp;SOCIETY</span></div>' +
-      '<img class="jc-logo" src="IMAGES/jijiwisha-logo.png" alt="">' +
+      '<img class="jc-logo" src="IMAGES/jijiwisha-logo.png" alt="Jijiwisha Society">' +
       "</div>" +
       '<div class="jc-body">' +
       '<div class="jc-eyebrow">✦ POSH COMPASS × JIJIWISHA SOCIETY</div>' +
@@ -799,14 +791,29 @@
       "</div>" +
       '<div class="jc-stripe jc-stripe-blue"></div>' +
       '<div class="jc-stripe jc-stripe-green"></div>' +
-      "</div>";
+      "</div>"
+    );
+  };
 
-    // Logo slot degrades gracefully: hidden unless IMAGES/jijiwisha-logo.png
-    // exists (inline onerror is CSP-blocked, so wire it here).
-    root.querySelectorAll("img").forEach(function (img) {
-      img.addEventListener("error", function () { img.style.display = "none"; });
-      if (img.complete && !img.naturalWidth) img.style.display = "none";
-    });
+  // Logo slot degrades gracefully if the asset is ever missing. error events
+  // don't bubble, so listen in the capture phase (inline onerror is CSP-blocked).
+  document.addEventListener("error", function (e) {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains("jc-logo")) t.style.display = "none";
+  }, true);
+
+  /* Prints the branded certificate: renders into #print-cert-root, a direct
+     child of <body>, and hides every other body child with display:none while
+     printing. display (not visibility) is essential: visibility:hidden keeps
+     layout space and yields blank pages before deeply-nested content. */
+  PC.printCertificate = function (o) {
+    let root = document.getElementById("print-cert-root");
+    if (!root) {
+      root = document.createElement("div");
+      root.id = "print-cert-root";
+      document.body.appendChild(root);
+    }
+    root.innerHTML = PC.buildCertificateHtml(o);
 
     // The template is landscape; scope the page size to this print only.
     const pageStyle = document.createElement("style");
