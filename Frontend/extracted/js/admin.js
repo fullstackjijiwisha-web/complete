@@ -107,7 +107,6 @@
           <div class="flex spread">
             <div>
               <span class="badge" style="background:#eef6f2; color:var(--green-900); font-weight:600">${q.type.toUpperCase()} (v${q.version})</span>
-              <span class="small muted" style="margin-left:8px">${PC.esc(q.actReference)}</span>
             </div>
             <div style="display:flex; gap:8px;">
               ${editBtn}
@@ -134,8 +133,6 @@
     document.getElementById("q-modal-title").textContent = q ? "Edit Question" : "Add New Question";
     document.getElementById("q-field-type").value = q ? q.type : "mcq";
     document.getElementById("q-field-type").disabled = !!q;
-    document.getElementById("q-field-ref").value = q ? q.actReference || "" : "";
-    document.getElementById("q-field-diff").value = q ? q.difficulty || "medium" : "medium";
     document.getElementById("q-field-body").value = q ? q.body : "";
 
     document.getElementById("q-options-list").innerHTML = "";
@@ -216,11 +213,9 @@
 
     const id = document.getElementById("q-field-id").value;
     const type = document.getElementById("q-field-type").value;
-    const actReference = document.getElementById("q-field-ref").value;
-    const difficulty = document.getElementById("q-field-diff").value;
     const body = document.getElementById("q-field-body").value;
 
-    const payload = { type, actReference, difficulty, body };
+    const payload = { type, body };
 
     if (type !== "fib") {
       const optionRows = document.querySelectorAll("#q-options-list .flex");

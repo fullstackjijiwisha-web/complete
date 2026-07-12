@@ -9,13 +9,18 @@ export const adminRoutes = Router();
 
 adminRoutes.use(requireAuth, roleGuard('super_admin'));
 
-// Question bank (PRD F3) — versioned CRUD, four formats
+// Question bank (PRD F3) — versioned CRUD, four formats. No defaults on the
+// base schema: with zod, `.partial()` still substitutes a `.default()` value
+// when a key is entirely absent from the body, which would make every PATCH
+// silently reset tags/isActive/difficulty to their defaults on fields the
+// admin dashboard doesn't send (e.g. wiping a question's tags, or
+// reactivating a soft-deleted one). Defaults are applied only for creation.
 const optionSchema = z.object({ text: z.string().min(1), weight: z.number().min(0).max(1) });
-const questionSchema = z.object({
+const questionBaseSchema = z.object({
   type: z.enum(['mcq', 'fib', 'case_study', 'simulation']),
-  tags: z.array(z.string().min(1)).default([]),
+  tags: z.array(z.string().min(1)).optional(),
   actReference: z.string().max(200).optional(),
-  difficulty: z.enum(['easy', 'medium', 'hard']).default('medium'),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
   body: z.string().min(10),
   options: z.array(optionSchema).min(2).optional(),
   blanks: z.array(z.object({ acceptedAnswers: z.array(z.string().min(1)).min(1) })).optional(),
@@ -37,12 +42,17 @@ const questionSchema = z.object({
       }),
     )
     .optional(),
+  isActive: z.boolean().optional(),
+});
+const createQuestionSchema = questionBaseSchema.extend({
+  tags: z.array(z.string().min(1)).default([]),
+  difficulty: z.enum(['easy', 'medium', 'hard']).default('medium'),
   isActive: z.boolean().default(true),
 });
 
 adminRoutes.get('/questions', controller.listQuestions);
-adminRoutes.post('/questions', validate(questionSchema), controller.createQuestion);
-adminRoutes.patch('/questions/:id', validate(questionSchema.partial()), controller.updateQuestion);
+adminRoutes.post('/questions', validate(createQuestionSchema), controller.createQuestion);
+adminRoutes.patch('/questions/:id', validate(questionBaseSchema.partial()), controller.updateQuestion);
 adminRoutes.delete('/questions/:id', controller.deleteQuestion);
 
 adminRoutes.get('/orgs', controller.listOrgs);
