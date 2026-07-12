@@ -202,10 +202,19 @@
       if (e.target === modal || e.target.closest("[data-close-cert]")) modal.classList.remove("open");
     });
     document.getElementById("btn-print-cert").addEventListener("click", function () {
-      document.body.classList.add("print-cert");
-      window.print();
+      PC.printCertificate({
+        title: "Certificate of Completion",
+        name: PC.esc(user.name),
+        bodyHtml:
+          "has successfully completed the POSH Assessment<br>with a score of <strong>" +
+          c.score + "%</strong> (threshold: " + passPct + "%)",
+        subLine: PC.esc(orgName) + " · Assessed on the POSH Compass platform",
+        refLine:
+          "Certificate ID: " + PC.esc(c.certId) +
+          " · Cycle: " + PC.esc(c.cycle) +
+          " · Issued: " + fmtDate(c.issuedAt),
+      });
     });
-    window.addEventListener("afterprint", function () { document.body.classList.remove("print-cert"); });
   }
 
   /* ---------- trend chart ---------- */

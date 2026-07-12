@@ -762,6 +762,69 @@
     }
   };
 
+  /* Branded certificate printing (Jijiwisha Society template) — shared by the
+     employee and audit certificates. Renders into #print-cert-root, a direct
+     child of <body>, and hides every other body child with display:none while
+     printing. display (not visibility) is essential: visibility:hidden keeps
+     layout space and yields blank pages before deeply-nested content.
+     Callers pass PRE-ESCAPED strings (use PC.esc); bodyHtml/refLine may
+     contain markup. Template styles: styles.css ".jiji-cert". */
+  PC.printCertificate = function (o) {
+    let root = document.getElementById("print-cert-root");
+    if (!root) {
+      root = document.createElement("div");
+      root.id = "print-cert-root";
+      document.body.appendChild(root);
+    }
+    root.innerHTML =
+      '<div class="jiji-cert">' +
+      '<div class="jc-head">' +
+      '<div class="jc-accent"></div>' +
+      '<div class="jc-band"><span class="jc-dot"></span><span class="jc-brandname">JIJIWISHA&nbsp;&nbsp;SOCIETY</span></div>' +
+      '<img class="jc-logo" src="IMAGES/jijiwisha-logo.png" alt="">' +
+      "</div>" +
+      '<div class="jc-body">' +
+      '<div class="jc-eyebrow">✦ POSH COMPASS × JIJIWISHA SOCIETY</div>' +
+      '<h1 class="jc-title">' + o.title + "</h1>" +
+      '<p class="jc-certify">This is to certify that</p>' +
+      '<div class="jc-name">' + o.name + "</div>" +
+      '<p class="jc-text">' + o.bodyHtml + "</p>" +
+      (o.subLine ? '<p class="jc-sub">' + o.subLine + "</p>" : "") +
+      '<div class="jc-ref">' + o.refLine + "</div>" +
+      "</div>" +
+      '<div class="jc-details">' +
+      "<span>Registration number - LUC/00699/2018-2019</span>" +
+      "<span>SHE - BOX Approved</span>" +
+      "<span>NCW Aligned</span>" +
+      "</div>" +
+      '<div class="jc-stripe jc-stripe-blue"></div>' +
+      '<div class="jc-stripe jc-stripe-green"></div>' +
+      "</div>";
+
+    // Logo slot degrades gracefully: hidden unless IMAGES/jijiwisha-logo.png
+    // exists (inline onerror is CSP-blocked, so wire it here).
+    root.querySelectorAll("img").forEach(function (img) {
+      img.addEventListener("error", function () { img.style.display = "none"; });
+      if (img.complete && !img.naturalWidth) img.style.display = "none";
+    });
+
+    // The template is landscape; scope the page size to this print only.
+    const pageStyle = document.createElement("style");
+    pageStyle.id = "print-cert-page";
+    pageStyle.textContent = "@page { size: A4 landscape; margin: 0; }";
+    document.head.appendChild(pageStyle);
+
+    document.body.classList.add("print-cert-mode");
+    const cleanup = function () {
+      document.body.classList.remove("print-cert-mode");
+      const s = document.getElementById("print-cert-page");
+      if (s) s.remove();
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+  };
+
   /* ---------------- session-aware nav ---------------- */
   function renderSessionUi(user) {
     const cta = document.querySelector(".nav-cta");

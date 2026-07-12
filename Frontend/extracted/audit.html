@@ -6,18 +6,6 @@
 <title>Audit Module — POSH Compass</title>
 <meta name="description" content="Book a POSH audit with Jijiwisha Society: document verification, Internal Committee checks, evidence pack generation and the final compliance report.">
 <link rel="stylesheet" href="css/styles.css">
-<style>
-  /* Print only the compliance certificate, not the whole audit timeline —
-     the certificate is nested deep inside #audit-flow-root (unlike the
-     employee certificate, which lives in its own top-level modal), so it's
-     isolated by id instead of hiding siblings at the body level. */
-  @media print {
-    body.print-cert * { visibility: hidden !important; }
-    body.print-cert #audit-certificate,
-    body.print-cert #audit-certificate * { visibility: visible !important; }
-    body.print-cert #audit-certificate { position: absolute; top: 0; left: 0; width: 100%; margin: 0; }
-  }
-</style>
 </head>
 <body data-page="audit.html">
 

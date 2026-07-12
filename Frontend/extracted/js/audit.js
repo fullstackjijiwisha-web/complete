@@ -49,15 +49,19 @@
     }
     const printBtn = e.target.closest(".audit-print-cert-btn");
     if (printBtn) {
-      // Print only the certificate — see the @media print rule in audit.html,
-      // which isolates #audit-certificate while this class is on <body>.
-      document.body.classList.add("print-cert");
-      window.print();
+      const comp = dash.compliance;
+      PC.printCertificate({
+        title: "POSH Compliance Certificate",
+        name: PC.esc(dash.org.name),
+        bodyHtml:
+          "has been audited and found compliant with the requirements of the<br>" +
+          "Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013",
+        refLine:
+          PC.esc(comp.certificateId || "") +
+          " · Valid till " + (comp.validTill ? fmtDate(comp.validTill) : "—"),
+      });
       return;
     }
-  });
-  window.addEventListener("afterprint", function () {
-    document.body.classList.remove("print-cert");
   });
 
   async function refresh() {
@@ -266,7 +270,7 @@
         (audit.decisionAt ? evRow("Decided", fmtDateTime(audit.decisionAt)) : "") +
         (audit.findings ? evRow("Findings", PC.esc(audit.findings)) : "") +
         "</div></div>" +
-        '<div class="certificate mt-3" id="audit-certificate">' +
+        '<div class="certificate mt-3">' +
         '<div class="c-brand">✦ POSH COMPASS × JIJIWISHA SOCIETY</div>' +
         "<h2>POSH Compliance Certificate</h2>" +
         '<p class="small muted">This is to certify that</p>' +

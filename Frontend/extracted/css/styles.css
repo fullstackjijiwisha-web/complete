@@ -995,3 +995,58 @@ details.data-view .data-table { min-width: 0; }
   display: inline-block;
   margin-bottom: 12px;
 }
+
+/* ---------- Branded certificate print template (Jijiwisha Society) ----------
+   Filled by PC.printCertificate (js/api.js) into #print-cert-root, a direct
+   child of <body>. Hidden on screen; during print, every OTHER body child is
+   display:none'd so exactly one landscape page comes out. Brand colors match
+   the official Jijiwisha slide template (green angled header band, blue+green
+   footer stripes, registration details above the stripes). */
+#print-cert-root { display: none; }
+
+.jiji-cert {
+  --jc-green-dark: #14563a;
+  --jc-green-light: #6cbe45;
+  --jc-blue: #2a56a5;
+  position: relative;
+  height: 100%;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.jiji-cert .jc-head { position: relative; height: 92px; flex: 0 0 auto; }
+.jiji-cert .jc-accent { position: absolute; top: 0; left: 0; width: 100%; height: 14px; background: var(--jc-green-light); }
+.jiji-cert .jc-band {
+  position: absolute; top: 0; left: 0; height: 100%; width: 56%;
+  background: var(--jc-green-dark);
+  clip-path: polygon(0 0, 100% 0, 86% 100%, 0 100%);
+  display: flex; align-items: center; gap: 14px; padding-left: 44px;
+}
+.jiji-cert .jc-dot { width: 26px; height: 26px; border-radius: 50%; background: var(--jc-green-light); flex: 0 0 auto; }
+.jiji-cert .jc-brandname { color: #fff; font-weight: 700; letter-spacing: 0.35em; font-size: 1.05rem; white-space: nowrap; }
+.jiji-cert .jc-logo { position: absolute; top: 22px; right: 36px; height: 64px; width: auto; }
+.jiji-cert .jc-body { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 10px 60px; }
+.jiji-cert .jc-eyebrow { font-family: var(--serif); font-weight: 700; color: var(--jc-green-dark); font-size: 1rem; }
+.jiji-cert .jc-title { font-family: var(--serif); font-size: 2rem; color: var(--jc-green-dark); margin: 14px 0 2px; }
+.jiji-cert .jc-certify { font-size: 0.85rem; color: #6b7671; margin: 8px 0 0; }
+.jiji-cert .jc-name { font-family: var(--serif); font-size: 2.1rem; color: var(--orange-700, #c2410c); margin: 10px 0 4px; }
+.jiji-cert .jc-text { font-size: 1rem; color: #26312b; margin: 10px 0 0; line-height: 1.55; }
+.jiji-cert .jc-sub { font-size: 0.85rem; color: #6b7671; margin: 8px 0 0; }
+.jiji-cert .jc-ref { font-family: var(--mono); font-size: 0.74rem; color: #6b7671; margin-top: 18px; }
+.jiji-cert .jc-details {
+  flex: 0 0 auto;
+  display: flex; justify-content: center; gap: 42px; flex-wrap: wrap;
+  padding: 0 40px 14px;
+  font-size: 0.8rem; font-weight: 600; color: var(--jc-green-dark);
+}
+.jiji-cert .jc-stripe { flex: 0 0 auto; width: 100%; }
+.jiji-cert .jc-stripe-blue { height: 7px; background: var(--jc-blue); }
+.jiji-cert .jc-stripe-green { height: 11px; background: var(--jc-green-light); }
+
+@media print {
+  body.print-cert-mode { margin: 0 !important; }
+  body.print-cert-mode > :not(#print-cert-root) { display: none !important; }
+  body.print-cert-mode #print-cert-root { display: block !important; height: 100vh; overflow: hidden; }
+}
