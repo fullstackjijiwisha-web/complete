@@ -2,6 +2,8 @@ import type { RequestHandler } from 'express';
 import bcrypt from 'bcryptjs';
 import { Question } from '../questions/question.model';
 import { Organisation } from '../organisations/organisation.model';
+import { OrgWipeBackup } from '../organisations/orgWipeBackup.model';
+import { previewOrganisationWipe, wipeAllOrganisations } from '../organisations/organisation.reset';
 import { User } from '../users/user.model';
 import { Audit, AuditSlot } from '../audits/audit.model';
 import { AuditLog, logAudit } from '../auditlog/auditLog.model';
@@ -122,6 +124,46 @@ export const patchOrg: RequestHandler = async (req, res) => {
   if (!org) throw ApiError.notFound();
   await logAudit('admin.org_updated', 'Organisation', org.id, authUser(req).id, update);
   res.json({ success: true, data: org });
+};
+
+// ── Danger zone: wipe all organisations ──────────────────────────────────
+// Deletes every organisation and everything scoped to it (HR/employee
+// accounts, attempts, certificates, audits, payments, invites). A full
+// snapshot is written to OrgWipeBackup before anything is deleted — see
+// organisation.reset.ts for exactly what is and is not touched.
+
+export const previewWipeOrganisations: RequestHandler = async (_req, res) => {
+  const counts = await previewOrganisationWipe();
+  res.json({ success: true, data: counts });
+};
+
+export const wipeOrganisations: RequestHandler = async (req, res) => {
+  const admin = authUser(req);
+  const adminUser = await User.findById(admin.id).select('email');
+  const result = await wipeAllOrganisations(adminUser?.email ?? admin.id, admin.id);
+  res.json({
+    success: true,
+    data: { backupId: result.backupId, counts: result.counts, backup: result.backup },
+  });
+};
+
+export const listWipeBackups: RequestHandler = async (req, res) => {
+  const { page, limit, skip } = pagination(req);
+  const [total, backups] = await Promise.all([
+    OrgWipeBackup.countDocuments({}),
+    OrgWipeBackup.find({}, { data: 0 }).sort({ performedAt: -1 }).skip(skip).limit(limit),
+  ]);
+  res.json({
+    success: true,
+    data: backups,
+    pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+  });
+};
+
+export const getWipeBackup: RequestHandler = async (req, res) => {
+  const backup = await OrgWipeBackup.findById(req.params.id);
+  if (!backup) throw ApiError.notFound();
+  res.json({ success: true, data: backup });
 };
 
 // ── Audit trail & platform config ────────────────────────────────────────

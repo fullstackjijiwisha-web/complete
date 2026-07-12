@@ -51,6 +51,19 @@ adminRoutes.patch(
   controller.patchOrg,
 );
 
+// Danger zone — permanently deletes every organisation and everything scoped
+// to it. A confirmation phrase is required in the body so a bare/replayed POST
+// can never trigger it. A full backup is taken before deleting (see
+// organisation.reset.ts); wipe-backups routes let it be retrieved afterward.
+adminRoutes.get('/organisations/wipe-preview', controller.previewWipeOrganisations);
+adminRoutes.post(
+  '/organisations/wipe',
+  validate(z.object({ confirm: z.literal('DELETE ALL ORGANISATIONS') })),
+  controller.wipeOrganisations,
+);
+adminRoutes.get('/organisations/wipe-backups', controller.listWipeBackups);
+adminRoutes.get('/organisations/wipe-backups/:id', controller.getWipeBackup);
+
 adminRoutes.get('/audit-log', controller.listAuditLog);
 adminRoutes.get('/config', controller.getConfig);
 

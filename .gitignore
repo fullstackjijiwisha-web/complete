@@ -27,3 +27,6 @@ server/config.json
 
 # Vercel CLI (local project link + pulled env files)
 .vercel
+
+# Org-wipe backups (scripts/wipe-organisations.ts) — contain real PII, never commit
+backups/

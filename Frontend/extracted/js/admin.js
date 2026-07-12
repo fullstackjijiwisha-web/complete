@@ -37,6 +37,13 @@
     document.getElementById("q-field-type").addEventListener("change", handleTypeChange);
     document.getElementById("question-form").addEventListener("submit", handleQuestionSave);
 
+    // Wire up the org danger-zone wipe modal
+    document.getElementById("btn-wipe-orgs").addEventListener("click", openWipeOrgsModal);
+    document.getElementById("wipe-orgs-modal-close").addEventListener("click", closeWipeOrgsModal);
+    document.getElementById("wipe-orgs-cancel").addEventListener("click", closeWipeOrgsModal);
+    document.getElementById("wipe-orgs-confirm-input").addEventListener("input", handleWipeConfirmInput);
+    document.getElementById("wipe-orgs-confirm-btn").addEventListener("click", handleWipeConfirm);
+
     // Load initial tab
     switchTab("questions");
   }
@@ -537,5 +544,100 @@
   PC.downloadOrgCert = function (orgId, filename) {
     PC.downloadFile(`/admin/orgs/${orgId}/certificate`, filename);
   };
+
+  /* ---------------- Danger zone: wipe all organisations ---------------- */
+
+  const WIPE_CONFIRM_PHRASE = "DELETE ALL ORGANISATIONS";
+
+  async function openWipeOrgsModal() {
+    const modal = document.getElementById("wipe-orgs-modal");
+    const input = document.getElementById("wipe-orgs-confirm-input");
+    const confirmBtn = document.getElementById("wipe-orgs-confirm-btn");
+    const errEl = document.getElementById("wipe-orgs-error");
+    const countsEl = document.getElementById("wipe-orgs-counts");
+
+    input.value = "";
+    confirmBtn.disabled = true;
+    confirmBtn.style.opacity = "0.5";
+    errEl.classList.add("hidden");
+    countsEl.textContent = "Loading current counts…";
+    modal.classList.add("open");
+
+    try {
+      const counts = await PC.api("/admin/organisations/wipe-preview");
+      countsEl.innerHTML =
+        "This will permanently delete <strong>" + counts.organisations + "</strong> organisation(s), " +
+        "<strong>" + counts.users + "</strong> HR/employee account(s), " +
+        "<strong>" + counts.attempts + "</strong> assessment attempt(s), " +
+        "<strong>" + counts.certificates + "</strong> certificate(s), " +
+        "<strong>" + counts.audits + "</strong> audit(s), " +
+        "<strong>" + counts.payments + "</strong> payment record(s), and " +
+        "<strong>" + counts.invites + "</strong> pending invite(s).";
+    } catch (ex) {
+      countsEl.innerHTML = '<span style="color:#dc2626">Could not load counts: ' + PC.esc(ex.message) + "</span>";
+    }
+  }
+
+  function closeWipeOrgsModal() {
+    document.getElementById("wipe-orgs-modal").classList.remove("open");
+  }
+
+  function handleWipeConfirmInput(e) {
+    const confirmBtn = document.getElementById("wipe-orgs-confirm-btn");
+    const matches = e.target.value === WIPE_CONFIRM_PHRASE;
+    confirmBtn.disabled = !matches;
+    confirmBtn.style.opacity = matches ? "1" : "0.5";
+  }
+
+  function downloadJson(obj, filename) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  }
+
+  async function handleWipeConfirm() {
+    const input = document.getElementById("wipe-orgs-confirm-input");
+    const confirmBtn = document.getElementById("wipe-orgs-confirm-btn");
+    const errEl = document.getElementById("wipe-orgs-error");
+
+    if (input.value !== WIPE_CONFIRM_PHRASE) return;
+
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Deleting…";
+    errEl.classList.add("hidden");
+
+    try {
+      const result = await PC.api("/admin/organisations/wipe", {
+        method: "POST",
+        body: { confirm: WIPE_CONFIRM_PHRASE },
+      });
+
+      // Local safety copy — in addition to the durable copy kept server-side
+      // (OrgWipeBackup, retrievable by backupId if this download is lost).
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      downloadJson(result.backup, `org-wipe-backup-${stamp}.json`);
+
+      closeWipeOrgsModal();
+      PC.alertModal(
+        "Organisations wiped",
+        "Deleted " + result.counts.organisations + " organisation(s) and everything tied to them. " +
+        "A backup was downloaded to your device and also stored server-side (backup id: " +
+        PC.esc(result.backupId) + ").",
+      );
+      loadOrgs();
+    } catch (ex) {
+      errEl.textContent = ex.message;
+      errEl.classList.remove("hidden");
+    } finally {
+      confirmBtn.textContent = "Permanently Delete Everything";
+      confirmBtn.disabled = input.value !== WIPE_CONFIRM_PHRASE;
+    }
+  }
 
 })();
