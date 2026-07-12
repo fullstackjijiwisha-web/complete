@@ -71,6 +71,7 @@
     }
     container.innerHTML = questions.map(q => {
       const editBtn = `<button class="btn btn-ghost btn-sm" onclick="PC.openEditQuestion('${q._id}')">Edit</button>`;
+      const deleteBtn = `<button class="btn btn-ghost btn-sm" onclick="PC.deleteQuestion('${q._id}')" style="color:var(--orange-700)">Delete</button>`;
       return `
         <div class="card question-list-item" style="padding:16px;">
           <div class="flex spread">
@@ -78,7 +79,10 @@
               <span class="badge" style="background:#eef6f2; color:var(--green-900); font-weight:600">${q.type.toUpperCase()} (v${q.version})</span>
               <span class="small muted" style="margin-left:8px">${PC.esc(q.actReference)}</span>
             </div>
-            ${editBtn}
+            <div style="display:flex; gap:8px;">
+              ${editBtn}
+              ${deleteBtn}
+            </div>
           </div>
           <p class="mt-1" style="font-weight:500; font-size:0.95rem;">${PC.esc(q.body)}</p>
           <div class="pill-row">
@@ -124,6 +128,16 @@
   PC.openEditQuestion = function (id) {
     const q = questions.find(item => item._id === id);
     if (q) openQuestionModal(q);
+  };
+
+  PC.deleteQuestion = async function (id) {
+    if (!confirm("Are you sure you want to delete this question? It will no longer appear in future assessments.")) return;
+    try {
+      await PC.api(`/admin/questions/${id}`, { method: "DELETE" });
+      loadQuestions();
+    } catch (e) {
+      alert("Error deleting question: " + e.message);
+    }
   };
 
   function closeQuestionModal() {

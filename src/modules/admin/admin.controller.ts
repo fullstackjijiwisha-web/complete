@@ -21,7 +21,7 @@ function pagination(req: Parameters<RequestHandler>[0]) {
 
 export const listQuestions: RequestHandler = async (req, res) => {
   const { page, limit, skip } = pagination(req);
-  const filter: Record<string, unknown> = {};
+  const filter: Record<string, unknown> = { isActive: true };
   if (req.query.type) filter.type = req.query.type;
   if (req.query.tag) filter.tags = req.query.tag;
 
@@ -71,6 +71,15 @@ export const updateQuestion: RequestHandler = async (req, res) => {
   const touchesContent = contentKeys.some((k) => req.body[k] !== undefined);
   Object.assign(question, req.body);
   if (touchesContent) question.version += 1;
+  await question.save();
+  res.json({ success: true, data: question });
+};
+
+export const deleteQuestion: RequestHandler = async (req, res) => {
+  const question = await Question.findById(req.params.id);
+  if (!question) throw ApiError.notFound();
+
+  question.isActive = false;
   await question.save();
   res.json({ success: true, data: question });
 };
