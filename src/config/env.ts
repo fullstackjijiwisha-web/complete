@@ -54,10 +54,10 @@ const envSchema = z.object({
   ATTEMPT_TIME_LIMIT_MIN: z.coerce.number().positive().default(45),
   MAX_ATTEMPTS_PER_CYCLE: z.coerce.number().positive().default(3),
 
-  PAPER_MCQ_COUNT: z.coerce.number().min(0).default(30),
+  PAPER_MCQ_COUNT: z.coerce.number().min(0).default(25),
   PAPER_FIB_COUNT: z.coerce.number().min(0).default(10),
-  PAPER_CASE_COUNT: z.coerce.number().min(0).default(6),
-  PAPER_SIM_COUNT: z.coerce.number().min(0).default(4),
+  PAPER_CASE_COUNT: z.coerce.number().min(0).default(20),
+  PAPER_SIM_COUNT: z.coerce.number().min(0).default(0),
 
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
