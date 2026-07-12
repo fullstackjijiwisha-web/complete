@@ -24,3 +24,6 @@ mongodb-data.backup/
 
 # Razorpay keys (README §Payments)
 server/config.json
+
+# Vercel CLI (local project link + pulled env files)
+.vercel
