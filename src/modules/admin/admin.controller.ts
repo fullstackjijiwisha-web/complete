@@ -118,6 +118,7 @@ export const listOrgs: RequestHandler = async (req, res) => {
               uploadedAt: d.uploadedAt,
               downloadUrl: `/api/v1/audits/${audit._id}/documents/${index}`,
             })),
+            checklist: audit.checklist.map((c) => ({ item: c.item, status: c.status })),
           }
           : null,
       };

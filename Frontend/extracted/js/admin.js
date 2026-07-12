@@ -304,6 +304,34 @@
         evidencePackHtml = '<p class="small muted mt-1"><em>No evidence files uploaded yet.</em></p>';
       }
 
+      // ── NCW checklist verification — super admin ticks items; the HR audit
+      //    page mirrors these as green ✓ Verified / red ✕ Not verified ──
+      let checklistHtml = "";
+      if (org.currentAudit && org.currentAudit.checklist && org.currentAudit.checklist.length) {
+        const auditId = org.currentAudit.id;
+        const okCount = org.currentAudit.checklist.filter(c => c.status === "ok").length;
+        const rows = org.currentAudit.checklist.map((c, i) => `
+          <li style="display:flex; align-items:center; gap:10px;">
+            <input type="checkbox" class="admin-check-item" style="width:16px; height:16px; cursor:pointer; flex:0 0 auto"
+                   data-audit-id="${auditId}" data-index="${i}" ${c.status === "ok" ? "checked" : ""}>
+            <span style="flex:1">${PC.esc(c.item)}</span>
+            ${c.status === "ok"
+              ? '<span class="badge badge-good">✓ Verified</span>'
+              : '<span class="badge badge-serious">✕ Not verified</span>'}
+          </li>`).join("");
+        checklistHtml = `
+          <div class="mt-2" style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:10px;">
+            <div class="flex spread" style="align-items:center; flex-wrap:wrap; gap:8px">
+              <h4 class="small" style="margin:0; font-weight:700; color:var(--green-900)">🛡 NCW Checklist Verification (${okCount}/${org.currentAudit.checklist.length})</h4>
+              <div class="flex" style="gap:6px">
+                <button class="btn btn-sm btn-green admin-checklist-all" data-audit-id="${auditId}" data-status="ok">✓ Verify all</button>
+                <button class="btn btn-sm btn-ghost admin-checklist-all" data-audit-id="${auditId}" data-status="issue" style="color:#dc2626; border-color:#dc2626">✕ Disapprove all</button>
+              </div>
+            </div>
+            <ul style="list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:6px; font-size:0.85rem">${rows}</ul>
+          </div>`;
+      }
+
       // ── Review panel — only shown when audit is pending (requested / scheduled / in_review) ──
       let reviewPanelHtml = "";
       const isPendingReview = org.currentAudit &&
@@ -390,6 +418,7 @@
               </p>
               ${attachedCertLink}
               ${evidencePackHtml}
+              ${checklistHtml}
               ${reviewPanelHtml}
             </div>
             <div class="flex" style="gap:8px; align-items:center; flex-shrink:0">
@@ -415,6 +444,39 @@
     });
     document.querySelectorAll(".btn-toggle-seats").forEach(btn => {
       btn.addEventListener("click", () => PC.toggleOrgSeats(btn.dataset.orgId, btn.dataset.seatsActive === "true"));
+    });
+
+    // NCW checklist: per-item checkbox + verify/disapprove all
+    document.querySelectorAll(".admin-check-item").forEach(cb => {
+      cb.addEventListener("change", async () => {
+        cb.disabled = true;
+        try {
+          await PC.api(`/audits/${cb.dataset.auditId}/checklist`, {
+            method: "PATCH",
+            body: { index: Number(cb.dataset.index), status: cb.checked ? "ok" : "issue" },
+          });
+          loadOrgs();
+        } catch (ex) {
+          alert("Failed to update checklist: " + ex.message);
+          cb.checked = !cb.checked;
+          cb.disabled = false;
+        }
+      });
+    });
+    document.querySelectorAll(".admin-checklist-all").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          await PC.api(`/audits/${btn.dataset.auditId}/checklist`, {
+            method: "PATCH",
+            body: { all: btn.dataset.status },
+          });
+          loadOrgs();
+        } catch (ex) {
+          alert("Failed to update checklist: " + ex.message);
+          btn.disabled = false;
+        }
+      });
     });
     
     // Attach listeners for view and download buttons

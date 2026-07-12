@@ -52,6 +52,13 @@
       PC.printCertificate(orgCertData());
       return;
     }
+    const refreshBtn = e.target.closest("#a-refresh");
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "↻ Refreshing…";
+      refresh(); // re-renders all stages, replacing this button
+      return;
+    }
   });
 
   // Data for the branded org compliance certificate — one source for both the
@@ -224,12 +231,13 @@
     } else {
       let checks = "";
       audit.checklist.forEach(function (c) {
+        // Verified items get a green tick; everything else a red cross —
+        // mirrors the super admin panel's checklist verification state.
         const badge =
           c.status === "ok" ? '<span class="badge badge-good">✓ Verified</span>' :
-          c.status === "issue" ? '<span class="badge badge-serious">⚑ Issue</span>' :
-          '<span class="badge badge-neutral">◷ Pending</span>';
+          '<span class="badge badge-serious">✕ Not verified</span>';
         checks +=
-          "<li><span data-icon='" + (c.status === "ok" ? "check" : "scale") + "' data-size='16' data-color='" + (c.status === "ok" ? "#0e7a3d" : "#75827a") + "'></span>" +
+          "<li><span data-icon='" + (c.status === "ok" ? "check" : "scale") + "' data-size='16' data-color='" + (c.status === "ok" ? "#0e7a3d" : "#dc2626") + "'></span>" +
           "<span>" + PC.esc(c.item) + (c.note ? "<br><span class='small muted'>Auditor note: " + PC.esc(c.note) + "</span>" : "") + "</span>" +
           '<span class="ref">' + badge + "</span></li>";
       });
@@ -375,10 +383,8 @@
       reader.readAsDataURL(file);
     });
 
-    // Stage 3: refresh
-    const refreshBtn = document.getElementById("a-refresh");
-    if (refreshBtn) refreshBtn.addEventListener("click", refresh);
-
+    // Stage 3's refresh button is handled by the delegated root listener
+    // above — delegation survives re-renders and any bind() ordering issue.
   }
 
   // The old localStorage demo had a reset button — hide it, state is server-side now.

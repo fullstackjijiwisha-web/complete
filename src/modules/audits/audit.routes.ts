@@ -42,11 +42,16 @@ auditRoutes.patch(
   '/:id/checklist',
   roleGuard('auditor', 'super_admin'),
   validate(
-    z.object({
-      index: z.number().int().min(0).max(50),
-      status: z.enum(['pending', 'ok', 'issue']),
-      note: z.string().max(2000).optional(),
-    }),
+    z.union([
+      // Single item — used by the per-item checkboxes in the admin panel.
+      z.object({
+        index: z.number().int().min(0).max(50),
+        status: z.enum(['pending', 'ok', 'issue']),
+        note: z.string().max(2000).optional(),
+      }),
+      // Bulk — "Verify all" / "Disapprove all" set every item at once.
+      z.object({ all: z.enum(['pending', 'ok', 'issue']) }),
+    ]),
   ),
   controller.updateChecklist,
 );

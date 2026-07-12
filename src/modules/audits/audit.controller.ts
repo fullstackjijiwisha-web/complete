@@ -143,13 +143,23 @@ export const updateChecklist: RequestHandler = async (req, res) => {
   const audit = await Audit.findOne(filter);
   if (!audit) throw ApiError.notFound();
 
-  const { index, status, note } = req.body as { index: number; status: 'pending' | 'ok' | 'issue'; note?: string };
-  const item = audit.checklist[index];
-  if (!item) throw ApiError.badRequest('Checklist item does not exist');
-  item.status = status;
-  if (note !== undefined) item.note = note;
+  const body = req.body as
+    | { index: number; status: 'pending' | 'ok' | 'issue'; note?: string }
+    | { all: 'pending' | 'ok' | 'issue' };
+
+  if ('all' in body) {
+    // Bulk verify/disapprove from the super admin panel.
+    audit.checklist.forEach((item) => { item.status = body.all; });
+  } else {
+    const item = audit.checklist[body.index];
+    if (!item) throw ApiError.badRequest('Checklist item does not exist');
+    item.status = body.status;
+    if (body.note !== undefined) item.note = body.note;
+  }
   if (audit.status === 'scheduled') audit.status = 'in_review';
   await audit.save();
+  await logAudit('audit.checklist_updated', 'Audit', audit.id, user.id,
+    'all' in body ? { all: body.all } : { index: body.index, status: body.status });
   res.json({ success: true, data: audit.checklist });
 };
 
