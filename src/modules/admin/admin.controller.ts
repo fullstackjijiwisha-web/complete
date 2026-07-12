@@ -21,7 +21,7 @@ function pagination(req: Parameters<RequestHandler>[0]) {
 
 export const listQuestions: RequestHandler = async (req, res) => {
   const { page, limit, skip } = pagination(req);
-  const filter: Record<string, unknown> = {};
+  const filter: Record<string, unknown> = { isActive: true };
   if (req.query.type) filter.type = req.query.type;
   if (req.query.tag) filter.tags = req.query.tag;
 
@@ -69,8 +69,26 @@ export const updateQuestion: RequestHandler = async (req, res) => {
 
   const contentKeys = ['body', 'options', 'blanks', 'nodes'];
   const touchesContent = contentKeys.some((k) => req.body[k] !== undefined);
+  
+  if (req.body.type) {
+    if (req.body.type === 'fib') { question.options = undefined; question.nodes = undefined; }
+    else if (req.body.type === 'simulation') { question.options = undefined; question.blanks = undefined; }
+    else { question.blanks = undefined; question.nodes = undefined; }
+  }
+  
   Object.assign(question, req.body);
+  assertQuestionShape(question.toObject());
+  
   if (touchesContent) question.version += 1;
+  await question.save();
+  res.json({ success: true, data: question });
+};
+
+export const deleteQuestion: RequestHandler = async (req, res) => {
+  const question = await Question.findById(req.params.id);
+  if (!question) throw ApiError.notFound();
+
+  question.isActive = false;
   await question.save();
   res.json({ success: true, data: question });
 };
@@ -91,14 +109,14 @@ export const listOrgs: RequestHandler = async (req, res) => {
         ...org.toObject(),
         currentAudit: audit
           ? {
-              id: audit._id,
-              status: audit.status,
-              documents: audit.documents.map((d, index) => ({
-                name: d.name,
-                uploadedAt: d.uploadedAt,
-                downloadUrl: `/api/v1/audits/${audit._id}/documents/${index}`,
-              })),
-            }
+            id: audit._id,
+            status: audit.status,
+            documents: audit.documents.map((d, index) => ({
+              name: d.name,
+              uploadedAt: d.uploadedAt,
+              downloadUrl: `/api/v1/audits/${audit._id}/documents/${index}`,
+            })),
+          }
           : null,
       };
     }),
@@ -253,14 +271,14 @@ export const downloadOrgCertificate: RequestHandler = async (req, res) => {
   }
 
   const fileBuffer = Buffer.from(org.compliance.customCertificateData, 'base64');
-  
+
   let contentType = 'application/octet-stream';
   let ext = '';
   const b64 = org.compliance.customCertificateData;
   if (b64.startsWith('JVBERi0')) { contentType = 'application/pdf'; ext = '.pdf'; }
   else if (b64.startsWith('iVBORw0KGgo')) { contentType = 'image/png'; ext = '.png'; }
   else if (b64.startsWith('/9j/')) { contentType = 'image/jpeg'; ext = '.jpg'; }
-  
+
   let filename = org.compliance.customCertificateFilename;
   if (ext && !filename.toLowerCase().includes('.')) filename += ext;
 
@@ -279,7 +297,7 @@ export const downloadOrgAuditDocument: RequestHandler = async (req, res) => {
   if (!doc || !doc.base64Data) throw ApiError.notFound('Document not found');
 
   const fileBuffer = Buffer.from(doc.base64Data, 'base64');
-  
+
   let contentType = 'application/octet-stream';
   let ext = '';
   if (doc.base64Data.startsWith('JVBERi0')) { contentType = 'application/pdf'; ext = '.pdf'; }
