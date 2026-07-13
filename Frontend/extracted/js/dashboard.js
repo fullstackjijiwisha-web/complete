@@ -245,7 +245,7 @@
     wireEnrolForm();
     wireCsvImport();
     const rc = document.getElementById("btn-ready-cert");
-    if (rc) rc.addEventListener("click", openReadyCertPdf);
+    if (rc) rc.addEventListener("click", function () { printReadyCertificate(s); });
     const decline = document.getElementById("btn-decline-audit");
     if (decline) decline.addEventListener("click", async function () {
       if (!confirm("Keep only the POSH Ready certificate and skip the audit for now? You can still book the audit later.")) return;
@@ -456,23 +456,27 @@
       "</div></div>";
   }
 
-  // Fetches the server-rendered POSH Ready certificate (auth header required, so
-  // a plain link won't do) and opens it in a new tab; it auto-prints.
-  async function openReadyCertPdf() {
-    let token = null;
-    try { token = localStorage.getItem("pc.accessToken"); } catch (e) {}
-    const w = window.open("", "_blank");
-    try {
-      const res = await fetch("/api/v1/orgs/me/ready-certificate/pdf", {
-        headers: token ? { Authorization: "Bearer " + token } : {},
-      });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const html = await res.text();
-      if (w) { w.document.open(); w.document.write(html); w.document.close(); }
-    } catch (e) {
-      if (w) w.close();
-      PC.alertModal("Could not open certificate", PC.esc(e.message));
-    }
+  // POSH Ready organisation certificate on the shared Jijiwisha branded
+  // template (PC.printCertificate) — the same design as the employee and
+  // compliance certificates. Replaces the old server-rendered popup
+  // (/orgs/me/ready-certificate/pdf), which still carried the legacy design
+  // and could be popup-blocked.
+  function printReadyCertificate(s) {
+    const r = s.readiness;
+    PC.printCertificate({
+      title: "Certificate of POSH Readiness",
+      name: PC.esc(s.org.name),
+      bodyHtml:
+        "has achieved <strong>POSH Ready</strong> status with " + r.score +
+        "% of enrolled employees certified for " + PC.esc(s.cycle),
+      subLine:
+        "POSH Ready attests self-assessed readiness — it is not the audited POSH Compliant " +
+        "certificate, which is issued by Jijiwisha Society after an audit.",
+      refLine:
+        PC.esc(r.certificateId || "") +
+        (r.certificateIssuedAt ? " · Issued: " + PC.esc(r.certificateIssuedAt) : "") +
+        (r.certificateVerifyUrl ? " · Verify: " + PC.esc(r.certificateVerifyUrl) : ""),
+    });
   }
 
   /* ================= charts ================= */
