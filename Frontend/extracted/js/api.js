@@ -785,8 +785,11 @@
       '<path d="M24 8 L27.5 20.5 L40 24 L27.5 27.5 L24 40 L20.5 27.5 L8 24 L20.5 20.5 Z" fill="#e2701d"/>' +
       "</svg>";
     const divider = '<div class="jc-divider"><span></span></div>';
+    // The wrapper is a size container: everything inside .jiji-cert is sized
+    // in cqw units so the certificate scales proportionally to whatever width
+    // it renders at (audit card, employee modal, full print page).
     return (
-      '<div class="jiji-cert">' +
+      '<div class="jiji-cert-wrap"><div class="jiji-cert">' +
       rose +
       '<div class="jc-frame"></div>' +
       '<div class="jc-logo-disc"><img class="jc-logo" src="IMAGES/jijiwisha-logo.png" alt="Jijiwisha Society"></div>' +
@@ -802,7 +805,7 @@
       '<div class="jc-ref">' + o.refLine + "</div>" +
       '<div class="jc-details">Registration number - LUC/00699/2018-2019 · SHE - BOX Approved · NCW Aligned</div>' +
       divider +
-      "</div>"
+      "</div></div>"
     );
   };
 

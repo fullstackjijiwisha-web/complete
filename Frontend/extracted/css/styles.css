@@ -1006,6 +1006,12 @@ details.data-view .data-table { min-width: 0; }
    stripes, registration details above the stripes). */
 #print-cert-root { display: none; }
 
+/* Size container: 1cqw = 1% of the certificate's rendered width. Everything
+   inside is sized in cqw so the layout is identical at every width — audit
+   card, employee modal, print page — and can never overflow the fixed
+   A4-landscape shape the way fixed px/rem sizes did at narrower widths. */
+.jiji-cert-wrap { container-type: inline-size; width: 100%; }
+
 .jiji-cert {
   --jc-gold: #d9b466;
   --jc-gold-bright: #efd9a7;
@@ -1020,45 +1026,44 @@ details.data-view .data-table { min-width: 0; }
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 44px 70px 30px;
-  /* On screen it keeps the same A4-landscape shape it prints in; the print
-     block below switches to full page height instead. */
+  padding: 4cqw 6cqw 2.5cqw;
   aspect-ratio: 297 / 210;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
 .jiji-cert .jc-frame {
-  position: absolute; inset: 12px;
+  position: absolute; inset: 1.1cqw;
   border: 1.5px solid rgba(217, 180, 102, 0.85);
   outline: 1px solid rgba(217, 180, 102, 0.35);
   outline-offset: 4px;
   pointer-events: none;
 }
 .jiji-cert .jc-rose { position: absolute; right: -5%; top: 12%; height: 76%; opacity: 0.09; pointer-events: none; }
-.jiji-cert .jc-logo-disc { width: 92px; height: 92px; border-radius: 50%; background: #fff; display: grid; place-items: center; flex: 0 0 auto; }
-.jiji-cert .jc-logo { height: 72px; width: auto; }
-.jiji-cert .jc-eyebrow { color: var(--jc-gold); font-weight: 700; letter-spacing: 0.18em; font-size: 0.92rem; margin-top: 14px; }
-.jiji-cert .jc-brandrow { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 8px; }
-.jiji-cert .jc-brandrow svg { height: 50px; width: 50px; flex: 0 0 auto; }
-.jiji-cert .jc-brandtext { font-family: var(--serif); font-size: 2.4rem; color: #f7faf7; }
+.jiji-cert .jc-logo-disc { width: 8.6cqw; height: 8.6cqw; border-radius: 50%; background: #fff; display: grid; place-items: center; flex: 0 0 auto; }
+.jiji-cert .jc-logo { height: 6.8cqw; width: auto; }
+.jiji-cert .jc-eyebrow { color: var(--jc-gold); font-weight: 700; letter-spacing: 0.18em; font-size: 1.15cqw; margin-top: 1.3cqw; }
+.jiji-cert .jc-brandrow { display: flex; align-items: center; justify-content: center; gap: 1.4cqw; margin-top: 0.8cqw; }
+.jiji-cert .jc-brandrow svg { height: 4.5cqw; width: 4.5cqw; flex: 0 0 auto; }
+.jiji-cert .jc-brandtext { font-family: var(--serif); font-size: 3cqw; color: #f7faf7; }
 .jiji-cert .jc-divider {
   display: flex; align-items: center; justify-content: center;
-  width: 46%; height: 12px; margin: 12px auto 0;
+  width: 46%; height: 1.1cqw; margin: 1cqw auto 0;
   background: linear-gradient(90deg, transparent, rgba(217,180,102,.9) 18%, rgba(217,180,102,.9) 82%, transparent) center / 100% 1.5px no-repeat;
 }
-.jiji-cert .jc-divider span { width: 8px; height: 8px; background: var(--jc-gold); transform: rotate(45deg); }
+.jiji-cert .jc-divider span { width: 0.75cqw; height: 0.75cqw; background: var(--jc-gold); transform: rotate(45deg); }
 .jiji-cert .jc-divider-sm { width: 28%; }
-.jiji-cert .jc-title { font-family: var(--serif); font-size: 2.3rem; color: var(--jc-gold-bright); margin: 12px 0 0; }
-.jiji-cert .jc-certify { font-family: var(--serif); font-size: 1rem; color: var(--jc-ink); margin: 10px 0 0; }
-.jiji-cert .jc-name { font-size: 1.7rem; font-weight: 800; color: var(--jc-gold); text-transform: uppercase; letter-spacing: 0.1em; margin: 10px 0 0; }
-.jiji-cert .jc-text { font-size: 0.98rem; color: var(--jc-ink); margin: 14px 0 0; line-height: 1.6; max-width: 80%; }
-.jiji-cert .jc-sub { font-size: 0.85rem; color: var(--jc-ink-dim); margin: 8px 0 0; }
-.jiji-cert .jc-ref { font-size: 1.02rem; color: var(--jc-ink); margin-top: 14px; letter-spacing: 0.02em; }
-.jiji-cert .jc-details { font-size: 0.88rem; color: var(--jc-ink-dim); margin-top: 14px; }
+.jiji-cert .jc-title { font-family: var(--serif); font-size: 2.9cqw; color: var(--jc-gold-bright); margin: 1.1cqw 0 0; }
+.jiji-cert .jc-certify { font-family: var(--serif); font-size: 1.3cqw; color: var(--jc-ink); margin: 0.9cqw 0 0; }
+.jiji-cert .jc-name { font-size: 2.1cqw; font-weight: 800; color: var(--jc-gold); text-transform: uppercase; letter-spacing: 0.1em; margin: 0.9cqw 0 0; }
+.jiji-cert .jc-text { font-size: 1.25cqw; color: var(--jc-ink); margin: 1.2cqw 0 0; line-height: 1.6; max-width: 80%; }
+.jiji-cert .jc-sub { font-size: 1.05cqw; color: var(--jc-ink-dim); margin: 0.7cqw 0 0; }
+.jiji-cert .jc-ref { font-size: 1.3cqw; color: var(--jc-ink); margin-top: 1.2cqw; letter-spacing: 0.02em; }
+.jiji-cert .jc-details { font-size: 1.1cqw; color: var(--jc-ink-dim); margin-top: 1.2cqw; }
 
 @media print {
   body.print-cert-mode { margin: 0 !important; }
   body.print-cert-mode > :not(#print-cert-root) { display: none !important; }
   body.print-cert-mode #print-cert-root { display: block !important; height: 100vh; overflow: hidden; }
+  body.print-cert-mode #print-cert-root .jiji-cert-wrap { height: 100%; }
   body.print-cert-mode #print-cert-root .jiji-cert { aspect-ratio: auto; height: 100%; }
 }
