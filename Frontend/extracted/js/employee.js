@@ -114,7 +114,7 @@
 
       '<div class="chart-card" id="certificate-card"><div class="c-head"><div><div class="c-title">My certificate</div>' +
       '<div class="c-sub">' + (cert ? "Publicly verifiable by its certificate ID" : "Certify with " + passPct + "%+ to unlock your certificate") + "</div></div></div>" +
-      (cert ? certPreview(cert, user, orgName) :
+      (cert ? certPreview(cert, user, orgName, passPct) :
         '<div class="center" style="padding:40px 20px"><p class="small muted">No certificate yet.</p>' +
         '<a class="btn btn-orange mt-2" href="assessment.html">Take the Assessment</a></div>') +
       "</div></div>" +
@@ -161,26 +161,11 @@
   }
 
   /* ---------- certificate ---------- */
-  function certPreview(c, user, orgName) {
-    return (
-      '<div class="certificate" style="padding:30px 22px;margin-top:12px">' +
-      '<div class="c-brand">✦ POSH COMPASS</div>' +
-      '<h2 style="font-size:1.3rem">Certificate of Completion</h2>' +
-      '<p class="small muted">This is to certify that</p>' +
-      '<div class="c-name" style="font-size:1.5rem">' + PC.esc(user.name) + "</div>" +
-      '<p class="c-score small">has successfully completed the POSH Assessment with a score of <strong>' + c.score + "%</strong></p>" +
-      '<div class="c-ref">' + PC.esc(c.certId) + " · " + fmtDate(c.issuedAt) + "</div>" +
-      "</div>" +
-      '<div class="flex mt-2" style="flex-wrap:wrap">' +
-      '<button class="btn btn-orange" id="btn-cert">⬇ View / Print Certificate</button>' +
-      '<a class="btn btn-ghost" href="' + PC.esc(c.verifyUrl) + '" target="_blank" rel="noopener">Verify publicly ↗</a></div>'
-    );
-  }
-
-  function wireCertificate(c, user, orgName, passPct) {
-    // One data object drives both the on-screen branded certificate and the
-    // print output (Jijiwisha template — PC.buildCertificateHtml in api.js).
-    const certData = {
+  // One data object drives every rendering of the employee certificate —
+  // dashboard preview, modal view, and print (Jijiwisha branded template,
+  // PC.buildCertificateHtml in api.js) — so they can never drift apart.
+  function employeeCertData(c, user, orgName, passPct) {
+    return {
       title: "Certificate of Completion",
       name: PC.esc(user.name),
       bodyHtml:
@@ -192,6 +177,19 @@
         " · Cycle: " + PC.esc(c.cycle) +
         " · Issued: " + fmtDate(c.issuedAt),
     };
+  }
+
+  function certPreview(c, user, orgName, passPct) {
+    return (
+      '<div class="mt-2">' + PC.buildCertificateHtml(employeeCertData(c, user, orgName, passPct)) + "</div>" +
+      '<div class="flex mt-2" style="flex-wrap:wrap">' +
+      '<button class="btn btn-orange" id="btn-cert">⬇ View / Print Certificate</button>' +
+      '<a class="btn btn-ghost" href="' + PC.esc(c.verifyUrl) + '" target="_blank" rel="noopener">Verify publicly ↗</a></div>'
+    );
+  }
+
+  function wireCertificate(c, user, orgName, passPct) {
+    const certData = employeeCertData(c, user, orgName, passPct);
 
     const modal = document.getElementById("cert-modal");
     modal.innerHTML =
