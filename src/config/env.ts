@@ -51,12 +51,12 @@ const envSchema = z.object({
   // ── Domain thresholds (platform constants — never per-organisation) ──
   CERT_PASS_THRESHOLD: z.coerce.number().min(0).max(100).default(80),
   ORG_READY_THRESHOLD: z.coerce.number().min(0).max(100).default(95),
-  ATTEMPT_TIME_LIMIT_MIN: z.coerce.number().positive().default(45),
+  ATTEMPT_TIME_LIMIT_MIN: z.coerce.number().positive().default(30),
   MAX_ATTEMPTS_PER_CYCLE: z.coerce.number().positive().default(3),
 
-  PAPER_MCQ_COUNT: z.coerce.number().min(0).default(25),
+  PAPER_MCQ_COUNT: z.coerce.number().min(0).default(12),
   PAPER_FIB_COUNT: z.coerce.number().min(0).default(10),
-  PAPER_CASE_COUNT: z.coerce.number().min(0).default(20),
+  PAPER_CASE_COUNT: z.coerce.number().min(0).default(5),
   PAPER_SIM_COUNT: z.coerce.number().min(0).default(0),
 
   RAZORPAY_KEY_ID: z.string().optional(),

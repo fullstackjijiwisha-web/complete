@@ -63,7 +63,7 @@ CI baseline (blueprint §9): `npm ci` → `npm run typecheck` → tests (when ad
 - **Org POSH Ready ≥ 95%** (`ORG_READY_THRESHOLD`) — recomputed after every scored submission (event-driven), recorded **once per cycle** with timestamp, unlocks audit booking, emits `readiness:update` to the org's socket room.
 - **Two tiers never conflated** — `readiness` and `compliance` are separate structures on Organisation; compliance changes only through the auditor decision endpoint.
 - **No department dimension anywhere** — no model field, no aggregate, no export contains department/team. Keep it that way (PRD §3.6 legal guardrail); add a CI test asserting it before P2.
-- Attempts: 60-min server-authoritative timer, autosave, auto-submit on expiry (+ cron sweep), max 3/cycle then HR approval, rotated random paper per attempt.
+- Attempts: 30-min server-authoritative timer, autosave, auto-submit on expiry (+ cron sweep), max 3/cycle then HR approval, rotated random paper per attempt (12 MCQ + 10 FIB + 5 case studies, shuffled per employee).
 - DPDP: consent at invite accept, `GET /users/me/export`, erasure via `DELETE /users/me` (anonymise, retain org aggregates + cert validity).
 
 ## Deliberate deviations from PRD/Blueprint (all flagged)
