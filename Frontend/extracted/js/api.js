@@ -768,29 +768,40 @@
      PRE-ESCAPED strings (use PC.esc); bodyHtml/refLine may contain markup.
      Template styles: styles.css ".jiji-cert". */
   PC.buildCertificateHtml = function (o) {
+    // Faint compass-rose watermark (right side) and the posh compass mark —
+    // inline SVG so the certificate stays fully self-contained.
+    const rose =
+      '<svg class="jc-rose" viewBox="0 0 200 200" aria-hidden="true">' +
+      '<g stroke="#d9b466" fill="none" stroke-width="1">' +
+      '<circle cx="100" cy="100" r="78"/><circle cx="100" cy="100" r="58" stroke-width="0.6"/>' +
+      "</g>" +
+      '<path d="M100 14 L111 89 L186 100 L111 111 L100 186 L89 111 L14 100 L89 89 Z" fill="#d9b466"/>' +
+      '<g fill="#d9b466" font-size="13" font-family="serif" text-anchor="middle">' +
+      '<text x="100" y="10">N</text><text x="193" y="105">E</text><text x="100" y="199">S</text><text x="7" y="105">W</text>' +
+      "</g></svg>";
+    const compassMark =
+      '<svg viewBox="0 0 48 48" aria-hidden="true">' +
+      '<circle cx="24" cy="24" r="21" fill="#0d2418" stroke="#d9b466" stroke-width="3"/>' +
+      '<path d="M24 8 L27.5 20.5 L40 24 L27.5 27.5 L24 40 L20.5 27.5 L8 24 L20.5 20.5 Z" fill="#e2701d"/>' +
+      "</svg>";
+    const divider = '<div class="jc-divider"><span></span></div>';
     return (
       '<div class="jiji-cert">' +
-      '<div class="jc-head">' +
-      '<div class="jc-accent"></div>' +
-      '<div class="jc-band"><span class="jc-dot"></span><span class="jc-brandname">JIJIWISHA&nbsp;&nbsp;SOCIETY</span></div>' +
-      '<img class="jc-logo" src="IMAGES/jijiwisha-logo.png" alt="Jijiwisha Society">' +
-      "</div>" +
-      '<div class="jc-body">' +
-      '<div class="jc-eyebrow">✦ POSH COMPASS × JIJIWISHA SOCIETY</div>' +
+      rose +
+      '<div class="jc-frame"></div>' +
+      '<div class="jc-logo-disc"><img class="jc-logo" src="IMAGES/jijiwisha-logo.png" alt="Jijiwisha Society"></div>' +
+      '<div class="jc-eyebrow">✦ POSH COMPASS × JIJIWISHA SOCIETY ✦</div>' +
+      '<div class="jc-brandrow">' + compassMark + '<span class="jc-brandtext">posh compass</span></div>' +
+      divider +
       '<h1 class="jc-title">' + o.title + "</h1>" +
       '<p class="jc-certify">This is to certify that</p>' +
       '<div class="jc-name">' + o.name + "</div>" +
+      '<div class="jc-divider jc-divider-sm"><span></span></div>' +
       '<p class="jc-text">' + o.bodyHtml + "</p>" +
       (o.subLine ? '<p class="jc-sub">' + o.subLine + "</p>" : "") +
       '<div class="jc-ref">' + o.refLine + "</div>" +
-      "</div>" +
-      '<div class="jc-details">' +
-      "<span>Registration number - LUC/00699/2018-2019</span>" +
-      "<span>SHE - BOX Approved</span>" +
-      "<span>NCW Aligned</span>" +
-      "</div>" +
-      '<div class="jc-stripe jc-stripe-blue"></div>' +
-      '<div class="jc-stripe jc-stripe-green"></div>' +
+      '<div class="jc-details">Registration number - LUC/00699/2018-2019 · SHE - BOX Approved · NCW Aligned</div>' +
+      divider +
       "</div>"
     );
   };

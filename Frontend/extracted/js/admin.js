@@ -173,8 +173,16 @@
 
   function handleTypeChange() {
     const type = document.getElementById("q-field-type").value;
-    document.getElementById("q-block-options").classList.toggle("hidden", type === "fib");
-    document.getElementById("q-block-blanks").classList.toggle("hidden", type !== "fib");
+    const optBlock = document.getElementById("q-block-options");
+    const blankBlock = document.getElementById("q-block-blanks");
+    optBlock.classList.toggle("hidden", type === "fib");
+    blankBlock.classList.toggle("hidden", type !== "fib");
+    // A hidden-but-required empty input silently blocks form submission (the
+    // browser can't focus it to show the message) — e.g. the default MCQ
+    // option rows after switching Format to FIB. Disable whichever block is
+    // hidden: disabled controls are exempt from constraint validation.
+    optBlock.querySelectorAll("input").forEach(i => { i.disabled = type === "fib"; });
+    blankBlock.querySelectorAll("input").forEach(i => { i.disabled = type !== "fib"; });
   }
 
   function addOptionRow(text = "", weight = 0) {

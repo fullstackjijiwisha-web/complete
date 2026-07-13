@@ -1007,52 +1007,58 @@ details.data-view .data-table { min-width: 0; }
 #print-cert-root { display: none; }
 
 .jiji-cert {
-  --jc-green-dark: #14563a;
-  --jc-green-light: #6cbe45;
-  --jc-blue: #2a56a5;
+  --jc-gold: #d9b466;
+  --jc-gold-bright: #efd9a7;
+  --jc-ink: #eef5f0;
+  --jc-ink-dim: #c8d8cf;
   position: relative;
-  background: #fff;
+  overflow: hidden;
+  background: radial-gradient(130% 150% at 22% 18%, #17402c 0%, #0d2b1e 45%, #061a11 100%);
+  color: var(--jc-ink);
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 44px 70px 30px;
   /* On screen it keeps the same A4-landscape shape it prints in; the print
      block below switches to full page height instead. */
   aspect-ratio: 297 / 210;
-  border: 1px solid var(--line);
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
-.jiji-cert .jc-head { position: relative; height: 92px; flex: 0 0 auto; }
-.jiji-cert .jc-accent { position: absolute; top: 0; left: 0; width: 100%; height: 14px; background: var(--jc-green-light); }
-.jiji-cert .jc-band {
-  position: absolute; top: 0; left: 0; height: 100%; width: 56%;
-  background: var(--jc-green-dark);
-  clip-path: polygon(0 0, 100% 0, 86% 100%, 0 100%);
-  display: flex; align-items: center; gap: 14px; padding-left: 44px;
+.jiji-cert .jc-frame {
+  position: absolute; inset: 12px;
+  border: 1.5px solid rgba(217, 180, 102, 0.85);
+  outline: 1px solid rgba(217, 180, 102, 0.35);
+  outline-offset: 4px;
+  pointer-events: none;
 }
-.jiji-cert .jc-dot { width: 26px; height: 26px; border-radius: 50%; background: var(--jc-green-light); flex: 0 0 auto; }
-.jiji-cert .jc-brandname { color: #fff; font-weight: 700; letter-spacing: 0.35em; font-size: 1.05rem; white-space: nowrap; }
-.jiji-cert .jc-logo { position: absolute; top: 22px; right: 36px; height: 64px; width: auto; }
-.jiji-cert .jc-body { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 10px 60px; }
-.jiji-cert .jc-eyebrow { font-family: var(--serif); font-weight: 700; color: var(--jc-green-dark); font-size: 1rem; }
-.jiji-cert .jc-title { font-family: var(--serif); font-size: 2rem; color: var(--jc-green-dark); margin: 14px 0 2px; }
-.jiji-cert .jc-certify { font-size: 0.85rem; color: #6b7671; margin: 8px 0 0; }
-.jiji-cert .jc-name { font-family: var(--serif); font-size: 2.1rem; color: var(--orange-700, #c2410c); margin: 10px 0 4px; }
-.jiji-cert .jc-text { font-size: 1rem; color: #26312b; margin: 10px 0 0; line-height: 1.55; }
-.jiji-cert .jc-sub { font-size: 0.85rem; color: #6b7671; margin: 8px 0 0; }
-.jiji-cert .jc-ref { font-family: var(--mono); font-size: 0.74rem; color: #6b7671; margin-top: 18px; }
-.jiji-cert .jc-details {
-  flex: 0 0 auto;
-  display: flex; justify-content: center; gap: 42px; flex-wrap: wrap;
-  padding: 0 40px 14px;
-  font-size: 0.8rem; font-weight: 600; color: var(--jc-green-dark);
+.jiji-cert .jc-rose { position: absolute; right: -5%; top: 12%; height: 76%; opacity: 0.09; pointer-events: none; }
+.jiji-cert .jc-logo-disc { width: 92px; height: 92px; border-radius: 50%; background: #fff; display: grid; place-items: center; flex: 0 0 auto; }
+.jiji-cert .jc-logo { height: 72px; width: auto; }
+.jiji-cert .jc-eyebrow { color: var(--jc-gold); font-weight: 700; letter-spacing: 0.18em; font-size: 0.92rem; margin-top: 14px; }
+.jiji-cert .jc-brandrow { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 8px; }
+.jiji-cert .jc-brandrow svg { height: 50px; width: 50px; flex: 0 0 auto; }
+.jiji-cert .jc-brandtext { font-family: var(--serif); font-size: 2.4rem; color: #f7faf7; }
+.jiji-cert .jc-divider {
+  display: flex; align-items: center; justify-content: center;
+  width: 46%; height: 12px; margin: 12px auto 0;
+  background: linear-gradient(90deg, transparent, rgba(217,180,102,.9) 18%, rgba(217,180,102,.9) 82%, transparent) center / 100% 1.5px no-repeat;
 }
-.jiji-cert .jc-stripe { flex: 0 0 auto; width: 100%; }
-.jiji-cert .jc-stripe-blue { height: 7px; background: var(--jc-blue); }
-.jiji-cert .jc-stripe-green { height: 11px; background: var(--jc-green-light); }
+.jiji-cert .jc-divider span { width: 8px; height: 8px; background: var(--jc-gold); transform: rotate(45deg); }
+.jiji-cert .jc-divider-sm { width: 28%; }
+.jiji-cert .jc-title { font-family: var(--serif); font-size: 2.3rem; color: var(--jc-gold-bright); margin: 12px 0 0; }
+.jiji-cert .jc-certify { font-family: var(--serif); font-size: 1rem; color: var(--jc-ink); margin: 10px 0 0; }
+.jiji-cert .jc-name { font-size: 1.7rem; font-weight: 800; color: var(--jc-gold); text-transform: uppercase; letter-spacing: 0.1em; margin: 10px 0 0; }
+.jiji-cert .jc-text { font-size: 0.98rem; color: var(--jc-ink); margin: 14px 0 0; line-height: 1.6; max-width: 80%; }
+.jiji-cert .jc-sub { font-size: 0.85rem; color: var(--jc-ink-dim); margin: 8px 0 0; }
+.jiji-cert .jc-ref { font-size: 1.02rem; color: var(--jc-ink); margin-top: 14px; letter-spacing: 0.02em; }
+.jiji-cert .jc-details { font-size: 0.88rem; color: var(--jc-ink-dim); margin-top: 14px; }
 
 @media print {
   body.print-cert-mode { margin: 0 !important; }
   body.print-cert-mode > :not(#print-cert-root) { display: none !important; }
   body.print-cert-mode #print-cert-root { display: block !important; height: 100vh; overflow: hidden; }
-  body.print-cert-mode #print-cert-root .jiji-cert { aspect-ratio: auto; height: 100%; border: none; }
+  body.print-cert-mode #print-cert-root .jiji-cert { aspect-ratio: auto; height: 100%; }
 }
