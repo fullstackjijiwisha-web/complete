@@ -31,6 +31,9 @@ function shuffle<T>(items: T[]): T[] {
 
 // Random draw per attempt so the post-scoring answer review can't be
 // memorised into a retake (PRD §3.5). Composition is platform config.
+// Each entry carries a full content snapshot: the attempt is presented,
+// scored, and reviewed against the question EXACTLY as drawn, so later edits
+// to the bank can never change a past (or in-flight) attempt.
 async function assemblePaper(): Promise<IPaperEntry[]> {
   const composition: Array<[QuestionType, number]> = [
     ['mcq', env.PAPER_MCQ_COUNT],
@@ -39,13 +42,12 @@ async function assemblePaper(): Promise<IPaperEntry[]> {
     ['simulation', env.PAPER_SIM_COUNT],
   ];
 
-  const drawn: Array<{ _id: Types.ObjectId; version: number; type: QuestionType }> = [];
+  const drawn: Array<IQuestion & { _id: Types.ObjectId }> = [];
   for (const [type, count] of composition) {
     if (count === 0) continue;
-    const sample = await Question.aggregate<{ _id: Types.ObjectId; version: number }>([
+    const sample = await Question.aggregate<IQuestion & { _id: Types.ObjectId }>([
       { $match: { type, isActive: true } },
       { $sample: { size: count } },
-      { $project: { version: 1 } },
     ]);
     if (sample.length < count) {
       logger.warn('Question bank smaller than paper composition', {
@@ -54,7 +56,7 @@ async function assemblePaper(): Promise<IPaperEntry[]> {
         available: sample.length,
       });
     }
-    drawn.push(...sample.map((s) => ({ ...s, type })));
+    drawn.push(...sample);
   }
 
   if (drawn.length === 0) {
@@ -66,6 +68,12 @@ async function assemblePaper(): Promise<IPaperEntry[]> {
     version: q.version,
     order: i + 1,
     type: q.type,
+    snapshot: {
+      body: q.body,
+      ...(q.options ? { options: q.options } : {}),
+      ...(q.blanks ? { blanks: q.blanks } : {}),
+      ...(q.nodes ? { nodes: q.nodes } : {}),
+    },
   }));
 }
 
@@ -112,10 +120,40 @@ export function sanitizedPaper(attempt: IAssessmentAttempt, questions: Map<strin
     .filter(Boolean);
 }
 
-export async function loadPaperQuestions(attempt: IAssessmentAttempt): Promise<Map<string, IQuestion>> {
-  const ids = attempt.paper.map((p) => p.questionId);
-  const questions = await Question.find({ _id: { $in: ids } }).lean<IQuestion & { _id: Types.ObjectId }[]>();
-  return new Map((questions as unknown as Array<IQuestion & { _id: Types.ObjectId }>).map((q) => [q._id.toString(), q]));
+// Resolves the paper's questions for presentation, scoring, and review.
+// Prefers the per-entry content snapshot frozen at draw time; falls back to
+// the live bank only for entries without one (attempts predating snapshots).
+// `fromBank: true` deliberately re-reads the live bank instead — used by the
+// super-admin rescore endpoint to apply corrected answer keys.
+export async function loadPaperQuestions(
+  attempt: IAssessmentAttempt,
+  opts: { fromBank?: boolean } = {},
+): Promise<Map<string, IQuestion>> {
+  const result = new Map<string, IQuestion>();
+  const missing: Types.ObjectId[] = [];
+
+  for (const entry of attempt.paper) {
+    if (!opts.fromBank && entry.snapshot) {
+      result.set(entry.questionId.toString(), {
+        type: entry.type,
+        version: entry.version,
+        body: entry.snapshot.body,
+        options: entry.snapshot.options,
+        blanks: entry.snapshot.blanks,
+        nodes: entry.snapshot.nodes,
+      } as IQuestion);
+    } else {
+      missing.push(entry.questionId);
+    }
+  }
+
+  if (missing.length) {
+    const questions = await Question.find({ _id: { $in: missing } }).lean<IQuestion & { _id: Types.ObjectId }[]>();
+    for (const q of questions as unknown as Array<IQuestion & { _id: Types.ObjectId }>) {
+      result.set(q._id.toString(), q);
+    }
+  }
+  return result;
 }
 
 export async function startAttempt(userId: string): Promise<AttemptDoc> {

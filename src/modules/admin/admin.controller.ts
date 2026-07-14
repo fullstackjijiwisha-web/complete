@@ -214,7 +214,9 @@ export const rescoreCertificate: RequestHandler = async (req, res) => {
   const attempt = await AssessmentAttempt.findById(cert.evidenceRef);
   if (!attempt || attempt.status !== 'scored') throw ApiError.notFound('Scored attempt not found');
 
-  const questions = await loadPaperQuestions(attempt);
+  // fromBank: rescoring exists precisely to apply corrected answer keys, so
+  // read the live bank rather than the attempt's frozen snapshots.
+  const questions = await loadPaperQuestions(attempt, { fromBank: true });
   const result = scoreAttempt(attempt, questions);
   const oldScore = attempt.score ?? 0;
 
@@ -227,6 +229,19 @@ export const rescoreCertificate: RequestHandler = async (req, res) => {
 
   attempt.score = result.total;
   attempt.sectionScores = result.sectionScores;
+  // Refresh the frozen snapshots to the content just scored against, so the
+  // answer review always agrees with the (new) recorded score.
+  for (const entry of attempt.paper) {
+    const q = questions.get(entry.questionId.toString());
+    if (!q) continue;
+    entry.snapshot = {
+      body: q.body,
+      ...(q.options ? { options: q.options } : {}),
+      ...(q.blanks ? { blanks: q.blanks } : {}),
+      ...(q.nodes ? { nodes: q.nodes } : {}),
+    };
+  }
+  attempt.markModified('paper');
   cert.score = result.total;
   cert.scoreBand = scoreBand(result.total);
   await Promise.all([attempt.save(), cert.save()]);

@@ -1,13 +1,32 @@
 import { Schema, model, Types } from 'mongoose';
-import type { QuestionType } from '../questions/question.model';
+import type {
+  QuestionType,
+  IQuestionOption,
+  IQuestionBlank,
+  ISimulationNode,
+} from '../questions/question.model';
 
 export type AttemptStatus = 'in_progress' | 'submitted' | 'scored';
+
+// Frozen copy of the question exactly as presented: the attempt is scored and
+// reviewed against THIS, never against the live bank, so editing a question
+// after (or during) an attempt can no longer change its score or make the
+// answer review disagree with the recorded result (evidence integrity,
+// PRD §11). The super-admin rescore endpoint deliberately re-reads the live
+// bank and refreshes this snapshot.
+export interface IPaperSnapshot {
+  body: string;
+  options?: IQuestionOption[];
+  blanks?: IQuestionBlank[];
+  nodes?: ISimulationNode[];
+}
 
 export interface IPaperEntry {
   questionId: Types.ObjectId;
   version: number;
   order: number;
   type: QuestionType;
+  snapshot?: IPaperSnapshot; // absent only on attempts created before this field existed
 }
 
 export interface IAnswer {
@@ -47,6 +66,7 @@ const attemptSchema = new Schema<IAssessmentAttempt>(
         version: { type: Number, required: true },
         order: { type: Number, required: true },
         type: { type: String, required: true },
+        snapshot: { type: Schema.Types.Mixed },
       },
     ],
     answers: [

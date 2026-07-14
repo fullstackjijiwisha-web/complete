@@ -56,7 +56,7 @@ const envSchema = z.object({
 
   PAPER_MCQ_COUNT: z.coerce.number().min(0).default(12),
   PAPER_FIB_COUNT: z.coerce.number().min(0).default(10),
-  PAPER_CASE_COUNT: z.coerce.number().min(0).default(5),
+  PAPER_CASE_COUNT: z.coerce.number().min(0).default(4),
   PAPER_SIM_COUNT: z.coerce.number().min(0).default(0),
 
   RAZORPAY_KEY_ID: z.string().optional(),
