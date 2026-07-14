@@ -2,6 +2,7 @@ import type { RequestHandler } from 'express';
 import { Types } from 'mongoose';
 import { AssessmentAttempt } from './attempt.model';
 import { startAttempt, finalizeAttempt, sanitizedPaper, loadPaperQuestions } from './assessment.service';
+import { scoreQuestion } from '../scoring/scoring.service';
 import { ApiError } from '../../utils/ApiError';
 import { authUser } from '../../utils/authUser';
 import { assertOwnership } from '../../utils/ownershipCheck';
@@ -189,13 +190,17 @@ export const review: RequestHandler = async (req, res) => {
       if (q.type === 'fib') {
         const given = Array.isArray(response) ? (response as string[]) : [];
         const accepted = (q.blanks ?? []).map((b) => b.acceptedAnswers[0] ?? '');
+        // Graded with the same matcher the scorer uses (case/whitespace-
+        // insensitive per blank), so the review verdict always agrees with
+        // the recorded score. Multi-blank questions can earn partial credit.
+        const points = scoreQuestion(q, response);
         return {
           order: entry.order,
           type: q.type,
           question: q.body,
           yourAnswer: given.join(' · ') || null,
           correctAnswer: accepted.join(' · '),
-          result: 'see_blanks',
+          result: points >= 0.999 ? 'correct' : points > 0 ? 'partial' : 'incorrect',
         };
       }
       // Simulation: decision path vs recommended path (PRD §5.2).

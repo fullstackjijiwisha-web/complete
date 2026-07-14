@@ -489,7 +489,6 @@
       const badge =
         r.result === "correct" ? '<span class="badge badge-good">✓ Correct</span>' :
         r.result === "partial" ? '<span class="badge badge-warning">◐ Partial credit</span>' :
-        r.result === "see_blanks" ? '<span class="badge badge-neutral">Per-blank</span>' :
         '<span class="badge badge-critical">✕ Incorrect</span>';
       rows +=
         "<tr><td>" + r.order + "</td><td>" + TYPE_LABEL[r.type] + "</td>" +
