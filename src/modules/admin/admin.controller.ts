@@ -46,8 +46,16 @@ function assertQuestionShape(body: Record<string, unknown>): void {
       throw ApiError.badRequest('MCQ needs options with exactly one weight-1 answer');
     }
   }
-  if (type === 'case_study' && !(body.options as unknown[] | undefined)?.length) {
-    throw ApiError.badRequest('Case study needs weighted options');
+  if (type === 'case_study') {
+    const options = body.options as Array<{ weight: number }> | undefined;
+    if (!options?.length) {
+      throw ApiError.badRequest('Case study needs weighted options');
+    }
+    // Without a full-credit option, a perfect paper score is impossible —
+    // every employee would be capped below 100% by authoring, not knowledge.
+    if (!options.some((o) => o.weight === 1)) {
+      throw ApiError.badRequest('Case study needs at least one weight-1 (best) option');
+    }
   }
   if (type === 'fib' && !(body.blanks as unknown[] | undefined)?.length) {
     throw ApiError.badRequest('Fill-in-the-blanks needs at least one blank');
