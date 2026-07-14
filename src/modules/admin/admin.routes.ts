@@ -75,6 +75,13 @@ adminRoutes.post(
 adminRoutes.get('/organisations/wipe-backups', controller.listWipeBackups);
 adminRoutes.get('/organisations/wipe-backups/:id', controller.getWipeBackup);
 
+// Maintenance: recompute a certified attempt against corrected answer keys.
+adminRoutes.post(
+  '/certificates/rescore',
+  validate(z.object({ certId: z.string().min(6).max(64) })),
+  controller.rescoreCertificate,
+);
+
 adminRoutes.get('/audit-log', controller.listAuditLog);
 adminRoutes.get('/config', controller.getConfig);
 

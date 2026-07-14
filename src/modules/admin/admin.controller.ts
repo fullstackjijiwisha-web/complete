@@ -8,9 +8,15 @@ import { User } from '../users/user.model';
 import { Audit, AuditSlot } from '../audits/audit.model';
 import { AuditLog, logAudit } from '../auditlog/auditLog.model';
 import { PublicStats } from '../stats/publicStats.model';
+import { Certificate } from '../certificates/certificate.model';
+import { AssessmentAttempt } from '../assessments/attempt.model';
+import { loadPaperQuestions } from '../assessments/assessment.service';
+import { scoreAttempt } from '../scoring/scoring.service';
+import { recomputeReadiness } from '../scoring/readiness.service';
 import { ApiError } from '../../utils/ApiError';
 import { authUser } from '../../utils/authUser';
 import { env } from '../../config/env';
+import { scoreBand } from '../../types';
 import { Types } from 'mongoose';
 
 function pagination(req: Parameters<RequestHandler>[0]) {
@@ -191,6 +197,50 @@ export const getWipeBackup: RequestHandler = async (req, res) => {
   const backup = await OrgWipeBackup.findById(req.params.id);
   if (!backup) throw ApiError.notFound();
   res.json({ success: true, data: backup });
+};
+
+// ── Maintenance: rescore a certified attempt ─────────────────────────────
+// A recorded score is frozen at submit time against the answer keys as they
+// were THEN. When a key is later corrected (e.g. a fill-in-the-blank that
+// rejected a valid synonym), the answer review — which recomputes against
+// current content — will disagree with the stored score. This endpoint
+// recomputes the attempt with the corrected keys and updates the attempt,
+// the certificate (score + band), and org readiness. Refuses to apply a
+// rescore that would drop the score below the certification threshold —
+// revoking a certificate is a deliberate manual decision, not a side effect.
+export const rescoreCertificate: RequestHandler = async (req, res) => {
+  const cert = await Certificate.findOne({ certId: req.body.certId, revoked: false });
+  if (!cert) throw ApiError.notFound('Certificate not found');
+  const attempt = await AssessmentAttempt.findById(cert.evidenceRef);
+  if (!attempt || attempt.status !== 'scored') throw ApiError.notFound('Scored attempt not found');
+
+  const questions = await loadPaperQuestions(attempt);
+  const result = scoreAttempt(attempt, questions);
+  const oldScore = attempt.score ?? 0;
+
+  if (result.total < env.CERT_PASS_THRESHOLD) {
+    throw ApiError.conflict(
+      `Rescore would give ${result.total}%, below the ${env.CERT_PASS_THRESHOLD}% certification threshold — not applied. ` +
+      'Review the question content or handle the certificate manually.',
+    );
+  }
+
+  attempt.score = result.total;
+  attempt.sectionScores = result.sectionScores;
+  cert.score = result.total;
+  cert.scoreBand = scoreBand(result.total);
+  await Promise.all([attempt.save(), cert.save()]);
+  await recomputeReadiness(cert.orgId.toString());
+  await logAudit('admin.attempt_rescored', 'Certificate', cert.certId, authUser(req).id, {
+    attemptId: attempt.id,
+    oldScore,
+    newScore: result.total,
+  });
+
+  res.json({
+    success: true,
+    data: { certId: cert.certId, oldScore, newScore: result.total, scoreBand: cert.scoreBand },
+  });
 };
 
 // ── Audit trail & platform config ────────────────────────────────────────

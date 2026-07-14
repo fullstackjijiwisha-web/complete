@@ -36,6 +36,26 @@
     document.getElementById("q-field-type").addEventListener("change", handleTypeChange);
     document.getElementById("question-form").addEventListener("submit", handleQuestionSave);
 
+    // Maintenance: rescore a certified attempt after an answer-key fix
+    document.getElementById("btn-rescore-cert").addEventListener("click", async function () {
+      const input = document.getElementById("rescore-cert-id");
+      const msg = document.getElementById("rescore-msg");
+      const certId = input.value.trim();
+      if (!certId) { msg.textContent = "Enter a certificate ID."; msg.style.color = "#dc2626"; return; }
+      this.disabled = true;
+      msg.style.color = "";
+      msg.textContent = "Rescoring…";
+      try {
+        const r = await PC.api("/admin/certificates/rescore", { method: "POST", body: { certId: certId } });
+        msg.style.color = "#0e7a3d";
+        msg.textContent = "✓ " + r.certId + ": " + r.oldScore + "% → " + r.newScore + "% (band: " + r.scoreBand + "). Attempt, certificate and readiness updated.";
+      } catch (ex) {
+        msg.style.color = "#dc2626";
+        msg.textContent = ex.message;
+      }
+      this.disabled = false;
+    });
+
     // Wire up the org danger-zone wipe modal
     document.getElementById("btn-wipe-orgs").addEventListener("click", openWipeOrgsModal);
     document.getElementById("wipe-orgs-modal-close").addEventListener("click", closeWipeOrgsModal);
