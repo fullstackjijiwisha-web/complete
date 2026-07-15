@@ -159,6 +159,7 @@
       dirty: {},          // questionId → response (pending autosave)
       simUi: {},          // questionId → {steps:[], nodeId}
       saveTimer: null,
+      flushChain: Promise.resolve(), // serialises autosave PATCHes
       timerId: null,
       submitting: false,
     };
@@ -208,7 +209,14 @@
     if (el) el.textContent = "Saving…";
   }
 
-  async function flushSaves() {
+  // Serialised on state.flushChain so PATCHes never overlap each other (or a
+  // submit): the returned promise settles only after every earlier flush has.
+  function flushSaves() {
+    state.flushChain = state.flushChain.then(doFlush).catch(function () {});
+    return state.flushChain;
+  }
+
+  async function doFlush() {
     const ids = Object.keys(state.dirty);
     if (!ids.length || state.submitting) return;
     const payload = ids.map(function (id) { return { questionId: id, response: state.dirty[id] }; });
@@ -225,6 +233,7 @@
         clearInterval(state.timerId);
         return renderResult(e.extra.result, true);
       }
+      if (e.code === "ATTEMPT_NOT_IN_PROGRESS") return; // scored meanwhile — submit carried the answers
       // put back and retry on next change
       payload.forEach(function (p) { if (!(p.questionId in state.dirty)) state.dirty[p.questionId] = p.response; });
       const el = document.getElementById("save-state");
@@ -395,15 +404,21 @@
   /* ================= submit → server scores ================= */
   async function submit(auto) {
     if (!state || state.submitting) return;
-    state.submitting = false; // allow flush first
-    clearTimeout(state.saveTimer);
-    await flushSaves();
     state.submitting = true;
+    clearTimeout(state.saveTimer);
     clearInterval(state.timerId);
+    // Wait for any autosave already on the wire so it can't land after scoring.
+    try { await state.flushChain; } catch (e) { /* answers travel with the submit anyway */ }
+
+    // The submit carries the complete answer set — the server merges it before
+    // scoring, so a lost or still-pending autosave can never cost marks.
+    const answers = Object.keys(state.answers).map(function (id) {
+      return { questionId: id, response: state.answers[id] };
+    });
 
     let result;
     try {
-      result = await PC.api("/assessments/attempts/" + state.attemptId + "/submit", { method: "POST", body: {} });
+      result = await PC.api("/assessments/attempts/" + state.attemptId + "/submit", { method: "POST", body: { answers: answers } });
     } catch (e) {
       // The server may have auto-submitted at expiry a heartbeat earlier.
       try {

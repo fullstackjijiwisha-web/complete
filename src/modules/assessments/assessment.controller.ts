@@ -86,6 +86,31 @@ export const getCurrent: RequestHandler = async (req, res) => {
   });
 };
 
+// Upsert incoming answers into the attempt document (in memory) — answers to
+// questions not on this paper are ignored.
+function mergeAnswers(
+  attempt: InstanceType<typeof AssessmentAttempt>,
+  incoming: Array<{ questionId: string; response: unknown }>,
+  now: Date,
+): void {
+  const paperIds = new Set(attempt.paper.map((p) => p.questionId.toString()));
+  for (const answer of incoming) {
+    if (!paperIds.has(answer.questionId)) continue;
+    const existing = attempt.answers.find((a) => a.questionId.toString() === answer.questionId);
+    if (existing) {
+      existing.response = answer.response;
+      existing.savedAt = now;
+    } else {
+      attempt.answers.push({
+        questionId: new Types.ObjectId(answer.questionId),
+        response: answer.response,
+        savedAt: now,
+      });
+    }
+  }
+  attempt.markModified('answers');
+}
+
 // Autosave every answer (PRD §3.5) — upserts by questionId.
 export const saveAnswers: RequestHandler = async (req, res) => {
   const user = authUser(req);
@@ -95,7 +120,7 @@ export const saveAnswers: RequestHandler = async (req, res) => {
   });
 
   if (attempt.status !== 'in_progress') {
-    throw ApiError.badRequest('Attempt is not in progress');
+    throw ApiError.badRequest('Attempt is not in progress', 'ATTEMPT_NOT_IN_PROGRESS');
   }
   if (attempt.expiresAt <= new Date()) {
     const result = await finalizeAttempt(attempt);
@@ -110,26 +135,25 @@ export const saveAnswers: RequestHandler = async (req, res) => {
     return;
   }
 
-  const paperIds = new Set(attempt.paper.map((p) => p.questionId.toString()));
   const now = new Date();
-  const incoming = req.body.answers as Array<{ questionId: string; response: unknown }>;
+  mergeAnswers(attempt, req.body.answers as Array<{ questionId: string; response: unknown }>, now);
 
-  for (const answer of incoming) {
-    if (!paperIds.has(answer.questionId)) continue; // ignore answers to questions not on this paper
-    const existing = attempt.answers.find((a) => a.questionId.toString() === answer.questionId);
-    if (existing) {
-      existing.response = answer.response;
-      existing.savedAt = now;
-    } else {
-      attempt.answers.push({
-        questionId: new Types.ObjectId(answer.questionId),
-        response: answer.response,
-        savedAt: now,
-      });
-    }
+  // Conditional write: if the attempt was scored between our read and now
+  // (e.g. a submit racing this autosave), the write matches nothing and the
+  // late answer is dropped — a frozen score must keep matching the stored
+  // answers it was computed from. The client re-sends every answer with the
+  // submit request itself, so nothing is lost.
+  const write = await AssessmentAttempt.updateOne(
+    { _id: attempt._id, status: 'in_progress' },
+    { $set: { answers: attempt.answers } },
+  );
+  if (write.matchedCount === 0) {
+    throw ApiError.badRequest('Attempt is not in progress', 'ATTEMPT_NOT_IN_PROGRESS');
   }
-  await attempt.save();
-  res.json({ success: true, data: { savedCount: incoming.length, savedAt: now } });
+  res.json({
+    success: true,
+    data: { savedCount: (req.body.answers as unknown[]).length, savedAt: now },
+  });
 };
 
 export const submit: RequestHandler = async (req, res) => {
@@ -141,6 +165,11 @@ export const submit: RequestHandler = async (req, res) => {
   if (attempt.status !== 'in_progress') {
     throw ApiError.badRequest('Attempt already submitted or timed out');
   }
+  // The client sends its complete answer set with the submit so scoring never
+  // depends on an autosave that may still be in flight (or lost) — the cause
+  // of scores computed on n-1 answers while the review showed all n.
+  const incoming = (req.body?.answers ?? []) as Array<{ questionId: string; response: unknown }>;
+  if (incoming.length) mergeAnswers(attempt, incoming, new Date());
   const result = await finalizeAttempt(attempt);
   res.json({ success: true, data: result });
 };
