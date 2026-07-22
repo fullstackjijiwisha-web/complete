@@ -16,7 +16,7 @@ import { currentCycle } from '../../utils/ids';
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
 import { logAudit } from '../auditlog/auditLog.model';
-import { performanceLevel } from '../../types';
+import { performanceLevel, scoreBand } from '../../types';
 
 type AttemptDoc = HydratedDocument<IAssessmentAttempt>;
 
@@ -31,10 +31,30 @@ function shuffle<T>(items: T[]): T[] {
 
 // Random draw per attempt so the post-scoring answer review can't be
 // memorised into a retake (PRD §3.5). Composition is platform config.
+// Questions the employee already saw in an earlier attempt this cycle are
+// excluded, so with a bank sized at 3× the paper (42 MCQ / 24 FIB / 24 case)
+// the three attempts of a cycle are fully disjoint. If the pool runs dry
+// (e.g. an HR-approved extra attempt), the draw tops up with repeats rather
+// than shrinking the paper.
 // Each entry carries a full content snapshot: the attempt is presented,
 // scored, and reviewed against the question EXACTLY as drawn, so later edits
 // to the bank can never change a past (or in-flight) attempt.
-async function assemblePaper(): Promise<IPaperEntry[]> {
+async function assemblePaper(userId: Types.ObjectId, cycle: string): Promise<IPaperEntry[]> {
+  const priorAttempts = await AssessmentAttempt.find({ userId, cycle })
+    .select('paper.questionId')
+    .lean();
+  const seenIds: Types.ObjectId[] = [];
+  const seenKeys = new Set<string>();
+  for (const prior of priorAttempts) {
+    for (const entry of prior.paper) {
+      const key = entry.questionId.toString();
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        seenIds.push(entry.questionId);
+      }
+    }
+  }
+
   const composition: Array<[QuestionType, number]> = [
     ['mcq', env.PAPER_MCQ_COUNT],
     ['fib', env.PAPER_FIB_COUNT],
@@ -45,10 +65,25 @@ async function assemblePaper(): Promise<IPaperEntry[]> {
   const drawn: Array<IQuestion & { _id: Types.ObjectId }> = [];
   for (const [type, count] of composition) {
     if (count === 0) continue;
-    const sample = await Question.aggregate<IQuestion & { _id: Types.ObjectId }>([
-      { $match: { type, isActive: true } },
+    let sample = await Question.aggregate<IQuestion & { _id: Types.ObjectId }>([
+      { $match: { type, isActive: true, _id: { $nin: seenIds } } },
       { $sample: { size: count } },
     ]);
+    if (sample.length < count) {
+      // Unseen pool exhausted for this employee — top up from the questions
+      // they have seen before (never duplicating within this paper).
+      const topUp = await Question.aggregate<IQuestion & { _id: Types.ObjectId }>([
+        { $match: { type, isActive: true, _id: { $nin: sample.map((q) => q._id) } } },
+        { $sample: { size: count - sample.length } },
+      ]);
+      logger.warn('Unseen question pool exhausted — topping up with repeats', {
+        type,
+        requested: count,
+        fresh: sample.length,
+        repeated: topUp.length,
+      });
+      sample = sample.concat(topUp);
+    }
     if (sample.length < count) {
       logger.warn('Question bank smaller than paper composition', {
         type,
@@ -191,7 +226,7 @@ export async function startAttempt(userId: string): Promise<AttemptDoc> {
     await user.save();
   }
 
-  const paper = await assemblePaper();
+  const paper = await assemblePaper(user._id, cycle);
   const now = new Date();
   return AssessmentAttempt.create({
     userId: user._id,
@@ -240,9 +275,23 @@ export async function finalizeAttempt(attempt: AttemptDoc): Promise<SubmitResult
       cycle: attempt.cycle,
       revoked: false,
     });
-    certificate = existing
-      ? { certId: existing.certId, issuedAt: existing.issuedAt }
-      : await issueCertificate(attempt, result.total);
+    if (existing) {
+      // The certificate always shows the employee's BEST passing score of the
+      // cycle — a stronger re-attempt upgrades it (and its evidence trail).
+      if (result.total > existing.score) {
+        existing.score = result.total;
+        existing.scoreBand = scoreBand(result.total);
+        existing.evidenceRef = attempt._id;
+        await existing.save();
+        await logAudit('certificate.score_improved', 'Certificate', existing.certId, userId, {
+          score: result.total,
+          attemptId: attempt.id,
+        });
+      }
+      certificate = { certId: existing.certId, issuedAt: existing.issuedAt };
+    } else {
+      certificate = await issueCertificate(attempt, result.total);
+    }
     await User.updateOne({ _id: attempt.userId }, { $set: { retrainingFlagged: false } });
   } else {
     // State 1: re-training flag raised; re-attempt window is HR-governed.
