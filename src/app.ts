@@ -17,6 +17,7 @@ import { userRoutes } from './modules/users/user.routes';
 import { organisationRoutes } from './modules/organisations/organisation.routes';
 import { employeeRoutes } from './modules/employees/employee.routes';
 import { assessmentRoutes } from './modules/assessments/assessment.routes';
+import { feedbackRoutes } from './modules/feedback/feedback.routes';
 import { certificateRoutes } from './modules/certificates/certificate.routes';
 import { auditRoutes } from './modules/audits/audit.routes';
 import { paymentRoutes } from './modules/payments/payment.routes';
@@ -110,6 +111,7 @@ export function createApp(): Express {
   app.use('/api/v1/orgs/me/employees', employeeRoutes);
   app.use('/api/v1/orgs', organisationRoutes);
   app.use('/api/v1/assessments', assessmentRoutes);
+  app.use('/api/v1/feedback', feedbackRoutes);
   app.use('/api/v1/certificates', certificateRoutes);
   app.use('/api/v1/audits', auditRoutes);
   app.use('/api/v1/payments', paymentRoutes);

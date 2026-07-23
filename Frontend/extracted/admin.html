@@ -46,6 +46,7 @@
       <div class="admin-sidebar">
         <button class="admin-tab-btn active" data-tab="questions">📚 Question Bank</button>
         <button class="admin-tab-btn" data-tab="orgs">🏢 Organisations</button>
+        <button class="admin-tab-btn" data-tab="feedback">💬 Feedbacks</button>
       </div>
 
       <div class="admin-content">
@@ -100,6 +101,21 @@
             <button class="btn btn-sm" id="btn-wipe-orgs" style="background:#dc2626; color:#fff; border:none;">
               🗑 Wipe All Organisation Data
             </button>
+          </div>
+        </div>
+
+        <!-- Tab: Feedbacks -->
+        <div id="tab-feedback" class="card hidden">
+          <div class="card-header-flex">
+            <h2 class="h-md" style="margin:0">Employee Feedback</h2>
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-feedback">↻ Refresh</button>
+          </div>
+          <p class="small muted" style="margin:0 0 14px">
+            Collected right after each scored attempt, before the employee sees their result.
+            Responses are anonymous — only the organisation and cycle are shown.
+          </p>
+          <div id="feedback-container">
+            <p class="small muted">Loading feedback…</p>
           </div>
         </div>
       </div>

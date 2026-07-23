@@ -83,7 +83,7 @@
     // Resume an in-progress attempt if the server has one.
     try {
       const current = await PC.api("/assessments/attempts/current");
-      if (current.autoSubmitted) return renderResult(current.result, true);
+      if (current.autoSubmitted) return renderFeedbackGate(current.result, true);
       return runEngine(current, true);
     } catch (e) {
       if (PC.backendDown(e)) return renderBackendDown();
@@ -231,7 +231,7 @@
     } catch (e) {
       if (e.code === "ATTEMPT_EXPIRED" && e.extra && e.extra.result) {
         clearInterval(state.timerId);
-        return renderResult(e.extra.result, true);
+        return renderFeedbackGate(e.extra.result, true);
       }
       if (e.code === "ATTEMPT_NOT_IN_PROGRESS") return; // scored meanwhile — submit carried the answers
       // put back and retry on next change
@@ -423,12 +423,197 @@
       // The server may have auto-submitted at expiry a heartbeat earlier.
       try {
         const current = await PC.api("/assessments/attempts/current");
-        if (current.autoSubmitted) return renderResult(current.result, true);
+        if (current.autoSubmitted) return renderFeedbackGate(current.result, true);
       } catch (e2) { /* fall through */ }
       state.submitting = false;
       return stageMessage("Submission failed", PC.esc(e.message));
     }
-    renderResult(result, auto);
+    renderFeedbackGate(result, auto);
+  }
+
+  /* ================= post-submit feedback (before the result) ================= */
+  function renderFeedbackGate(rs, auto) {
+    // The feedback form needs a scored attempt to attach to; degrade to the
+    // result screen if the payload has none (shouldn't happen in practice).
+    if (!rs || !rs.attemptId) return renderResult(rs, auto);
+    renderFeedbackForm(rs, auto);
+  }
+
+  const FB_SUGGESTIONS = [
+    ["more_case_scenarios", "More real-life case scenarios"],
+    ["more_practice_questions", "More practice questions"],
+    ["better_explanations", "Better explanations / feedback"],
+    ["shorter_assessment", "Shorter assessment time"],
+    ["industry_examples", "Industry specific examples"],
+  ];
+
+  function fbStars(group, labels) {
+    let btns = "";
+    for (let v = 1; v <= 5; v++) btns += '<button type="button" class="fb-star" data-group="' + group + '" data-val="' + v + '" aria-label="' + v + ' of 5">★</button>';
+    return '<div class="fb-scale">' + btns + "</div>" +
+      '<div class="fb-scale-labels"><span>' + labels[0] + "</span><span>" + labels[1] + "</span><span>" + labels[2] + "</span></div>";
+  }
+
+  function fbCard(num, title, question, inner, group) {
+    return '<div class="fb-card" data-card="' + group + '">' +
+      '<div class="fb-card-head"><span class="fb-num fb-num-' + num + '">' + num + "</span>" +
+      '<h4 class="fb-card-title">' + title + "</h4></div>" +
+      '<p class="fb-q">' + question + "</p>" + inner + "</div>";
+  }
+
+  function renderFeedbackForm(rs, auto) {
+    const fb = { overall: 0, content: 0, caseScenarios: 0, application: 0, recommendation: -1 };
+    const FACES = ["😞", "🙁", "😐", "🙂", "😄"];
+    const steps = [
+      ["Overall Experience", "How would you rate your overall assessment experience?"],
+      ["Content Quality", "How relevant and helpful was the content?"],
+      ["Case Scenarios", "How effective were the case situations in testing your understanding?"],
+      ["Application to Workplace", "How confident are you in applying this knowledge at your workplace?"],
+      ["Suggestions", "What can we improve or add to make this better?"],
+      ["Recommendation", "How likely are you to recommend POSH Compass to others?"],
+    ];
+
+    let faces = "";
+    for (let v = 1; v <= 5; v++) faces += '<button type="button" class="fb-face" data-val="' + v + '" aria-label="' + v + ' of 5">' + FACES[v - 1] + "</button>";
+    let nps = "";
+    for (let v = 0; v <= 10; v++) nps += '<button type="button" class="fb-nps" data-val="' + v + '">' + v + "</button>";
+    let checks = "";
+    FB_SUGGESTIONS.forEach(function (s) {
+      checks += '<label class="fb-check"><input type="checkbox" data-sug="' + s[0] + '"> ' + s[1] + "</label>";
+    });
+    checks += '<label class="fb-check"><input type="checkbox" data-sug="other" id="fb-other-cb"> Other (Please specify)</label>' +
+      '<input type="text" id="fb-other" class="fb-other-input" maxlength="200" placeholder="">';
+
+    let stepsHtml = "";
+    steps.forEach(function (s, i) {
+      stepsHtml += '<div class="fb-step"><span class="fb-num fb-num-' + (i + 1) + '">' + (i + 1) + "</span>" +
+        '<div class="fb-step-t">' + s[0] + "</div><div class=\"fb-step-d\">" + s[1] + "</div></div>";
+    });
+
+    root.innerHTML =
+      '<div class="fb-shell" id="fb-root">' +
+      '<div class="fb-hero"><h2>We Value Your Feedback!</h2>' +
+      "<p>Please take a few minutes to share your experience.<br>" +
+      'Your feedback helps us improve and create <span class="fb-accent">safer workplaces</span> for everyone.</p></div>' +
+      '<div class="fb-steps">' + stepsHtml + "</div>" +
+      '<div class="fb-strip-title">💬 PLEASE SHARE YOUR FEEDBACK</div>' +
+      '<div class="fb-grid">' +
+      fbCard(1, "Overall Experience", steps[0][1], fbStars("overall", ["Very Poor", "Average", "Excellent"]), "overall") +
+      fbCard(2, "Content Quality", steps[1][1], fbStars("content", ["Not Relevant", "Neutral", "Very Relevant"]), "content") +
+      fbCard(3, "Case Scenarios", steps[2][1], fbStars("caseScenarios", ["Not Effective", "Neutral", "Very Effective"]), "caseScenarios") +
+      fbCard(4, "Application to Workplace", steps[3][1],
+        '<div class="fb-scale fb-faces">' + faces + "</div>" +
+        '<div class="fb-scale-labels"><span>Not Confident</span><span>Neutral</span><span>Very Confident</span></div>', "application") +
+      fbCard(5, "Suggestions", steps[4][1] + " (Select all that apply)", '<div class="fb-checks">' + checks + "</div>", "suggestions") +
+      fbCard(6, "Recommendation", steps[5][1],
+        '<div class="fb-nps-row">' + nps + "</div>" +
+        '<div class="fb-scale-labels"><span>Not Likely</span><span></span><span>Very Likely</span></div>', "recommendation") +
+      "</div>" +
+      '<div class="fb-card fb-comments"><div class="fb-card-head"><span class="fb-num fb-num-1">💬</span>' +
+      '<h4 class="fb-card-title">Any Additional Comments?</h4></div>' +
+      '<p class="fb-q">We\'d love to hear any other thoughts or suggestions.</p>' +
+      '<textarea id="fb-comments" maxlength="500" rows="4" placeholder="Type your comments here..."></textarea>' +
+      '<div class="fb-count"><span id="fb-count">0</span> / 500</div></div>' +
+      '<div class="fb-actions">' +
+      '<button type="button" class="btn fb-submit" id="fb-submit">Submit Feedback ➤</button>' +
+      '<div class="fb-secure">🔒 Your responses are confidential and secure.</div>' +
+      '<div id="fb-msg" class="fb-msg"></div></div>' +
+      '<div class="fb-thanks"><span class="fb-thanks-check">✓</span><div>' +
+      "<strong>Thank You!</strong><br>Your feedback helps us build better assessments, " +
+      "stronger workplaces, and a safer tomorrow.</div></div></div>";
+
+    const fbRoot = document.getElementById("fb-root");
+
+    fbRoot.addEventListener("click", async function (e) {
+      const star = e.target.closest(".fb-star");
+      if (star) {
+        const group = star.dataset.group;
+        fb[group] = Number(star.dataset.val);
+        fbRoot.querySelectorAll('.fb-star[data-group="' + group + '"]').forEach(function (b) {
+          b.classList.toggle("on", Number(b.dataset.val) <= fb[group]);
+        });
+        star.closest(".fb-card").classList.remove("fb-missing");
+        return;
+      }
+      const face = e.target.closest(".fb-face");
+      if (face) {
+        fb.application = Number(face.dataset.val);
+        fbRoot.querySelectorAll(".fb-face").forEach(function (b) {
+          b.classList.toggle("sel", b === face);
+        });
+        face.closest(".fb-card").classList.remove("fb-missing");
+        return;
+      }
+      const npsBtn = e.target.closest(".fb-nps");
+      if (npsBtn) {
+        fb.recommendation = Number(npsBtn.dataset.val);
+        fbRoot.querySelectorAll(".fb-nps").forEach(function (b) {
+          b.classList.toggle("sel", b === npsBtn);
+        });
+        npsBtn.closest(".fb-card").classList.remove("fb-missing");
+        return;
+      }
+      if (e.target.closest("#fb-continue")) return renderResult(rs, auto);
+      if (e.target.closest("#fb-submit")) return submitFeedback();
+    });
+
+    const comments = document.getElementById("fb-comments");
+    comments.addEventListener("input", function () {
+      document.getElementById("fb-count").textContent = String(comments.value.length);
+    });
+    document.getElementById("fb-other").addEventListener("input", function () {
+      if (this.value.trim()) document.getElementById("fb-other-cb").checked = true;
+    });
+
+    async function submitFeedback() {
+      const msg = document.getElementById("fb-msg");
+      const missing = ["overall", "content", "caseScenarios", "application"].filter(function (k) { return fb[k] < 1; });
+      if (fb.recommendation < 0) missing.push("recommendation");
+      if (missing.length) {
+        missing.forEach(function (k) {
+          const card = fbRoot.querySelector('.fb-card[data-card="' + k + '"]');
+          if (card) card.classList.add("fb-missing");
+        });
+        msg.textContent = "Please complete the highlighted sections before submitting.";
+        msg.className = "fb-msg err";
+        return;
+      }
+      const suggestions = [];
+      fbRoot.querySelectorAll(".fb-check input:checked").forEach(function (cb) { suggestions.push(cb.dataset.sug); });
+      const other = document.getElementById("fb-other").value.trim();
+      if (other && suggestions.indexOf("other") === -1) suggestions.push("other");
+
+      const btn = document.getElementById("fb-submit");
+      btn.disabled = true;
+      btn.textContent = "Submitting…";
+      msg.textContent = "";
+      msg.className = "fb-msg";
+      try {
+        await PC.api("/feedback", {
+          method: "POST",
+          body: {
+            attemptId: rs.attemptId,
+            ratings: {
+              overall: fb.overall,
+              content: fb.content,
+              caseScenarios: fb.caseScenarios,
+              application: fb.application,
+              recommendation: fb.recommendation,
+            },
+            suggestions: suggestions,
+            suggestionOther: other || undefined,
+            comments: comments.value.trim() || undefined,
+          },
+        });
+        renderResult(rs, auto);
+      } catch (ex) {
+        btn.disabled = false;
+        btn.textContent = "Submit Feedback ➤";
+        msg.innerHTML = PC.esc(ex.message || "Could not save your feedback.") +
+          ' <a href="#" id="fb-continue">Continue to your result →</a>';
+        msg.className = "fb-msg err";
+      }
+    }
   }
 
   function scoreRing(pct, passed) {

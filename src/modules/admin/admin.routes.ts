@@ -4,6 +4,7 @@ import { requireAuth } from '../../middleware/requireAuth';
 import { roleGuard } from '../../middleware/roleGuard';
 import { validate } from '../../middleware/validate';
 import * as controller from './admin.controller';
+import { adminListFeedback } from '../feedback/feedback.controller';
 
 export const adminRoutes = Router();
 
@@ -81,6 +82,10 @@ adminRoutes.post(
   validate(z.object({ certId: z.string().min(6).max(64) })),
   controller.rescoreCertificate,
 );
+
+// Post-assessment employee feedback — aggregate stats + latest entries
+// (anonymous: org + cycle only, per the form's confidentiality promise).
+adminRoutes.get('/feedback', adminListFeedback);
 
 adminRoutes.get('/audit-log', controller.listAuditLog);
 adminRoutes.get('/config', controller.getConfig);

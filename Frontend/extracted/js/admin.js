@@ -56,6 +56,8 @@
       this.disabled = false;
     });
 
+    document.getElementById("btn-refresh-feedback").addEventListener("click", loadFeedback);
+
     // Wire up the org danger-zone wipe modal
     document.getElementById("btn-wipe-orgs").addEventListener("click", openWipeOrgsModal);
     document.getElementById("wipe-orgs-modal-close").addEventListener("click", closeWipeOrgsModal);
@@ -93,11 +95,87 @@
 
   function switchTab(tab) {
     currentTab = tab;
-    ["questions", "orgs"].forEach(t => {
+    ["questions", "orgs", "feedback"].forEach(t => {
       document.getElementById("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "questions") loadQuestions();
     if (tab === "orgs") loadOrgs();
+    if (tab === "feedback") loadFeedback();
+  }
+
+  /* ---------------- Feedbacks Tab ---------------- */
+  const SUGGESTION_LABELS = {
+    more_case_scenarios: "More real-life case scenarios",
+    more_practice_questions: "More practice questions",
+    better_explanations: "Better explanations / feedback",
+    shorter_assessment: "Shorter assessment time",
+    industry_examples: "Industry specific examples",
+    other: "Other",
+  };
+
+  function starsTxt(n) {
+    return '<span class="star">' + "★".repeat(n) + "</span>" + "☆".repeat(5 - n);
+  }
+
+  async function loadFeedback() {
+    const box = document.getElementById("feedback-container");
+    box.innerHTML = '<p class="small muted">Loading feedback…</p>';
+    let data;
+    try {
+      data = await PC.api("/admin/feedback");
+    } catch (e) {
+      box.innerHTML = '<p class="small" style="color:#dc2626">' + PC.esc(e.message) + "</p>";
+      return;
+    }
+    const s = data.stats;
+    if (!s.count) {
+      box.innerHTML = '<p class="small muted">No feedback yet — entries appear here as employees complete their assessments.</p>';
+      return;
+    }
+
+    let html =
+      '<div class="fbadmin-stats">' +
+      '<div class="fbadmin-tile"><div class="num">' + s.count + '</div><div class="lbl">Responses</div></div>' +
+      '<div class="fbadmin-tile"><div class="num">' + (s.avgOverall ?? "—") + '</div><div class="lbl">Avg overall (of 5)</div></div>' +
+      '<div class="fbadmin-tile"><div class="num">' + (s.avgContent ?? "—") + '</div><div class="lbl">Avg content (of 5)</div></div>' +
+      '<div class="fbadmin-tile"><div class="num">' + (s.avgCaseScenarios ?? "—") + '</div><div class="lbl">Avg case scenarios (of 5)</div></div>' +
+      '<div class="fbadmin-tile"><div class="num">' + (s.avgApplication ?? "—") + '</div><div class="lbl">Avg confidence (of 5)</div></div>' +
+      '<div class="fbadmin-tile"><div class="num">' + (s.avgRecommendation ?? "—") + '</div><div class="lbl">Avg recommendation (of 10)</div></div>' +
+      "</div>";
+
+    const suggEntries = Object.entries(s.suggestionCounts || {});
+    if (suggEntries.length) {
+      html += '<div class="pill-row" style="margin-bottom:14px">' +
+        suggEntries.map(([k, n]) =>
+          '<span class="badge badge-neutral">' + PC.esc(SUGGESTION_LABELS[k] || k) + " · " + n + "</span>").join("") +
+        "</div>";
+    }
+
+    html += data.items.map(function (f) {
+      const d = new Date(f.createdAt);
+      const r = f.ratings;
+      let item =
+        '<div class="fbadmin-item">' +
+        '<div class="fbadmin-meta"><strong>' + PC.esc(f.orgName) + "</strong>" +
+        "<span>" + f.cycle + "</span><span>" + d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) + "</span></div>" +
+        '<div class="fbadmin-ratings">' +
+        "<span>Overall " + starsTxt(r.overall) + "</span>" +
+        "<span>Content " + starsTxt(r.content) + "</span>" +
+        "<span>Cases " + starsTxt(r.caseScenarios) + "</span>" +
+        "<span>Confidence " + starsTxt(r.application) + "</span>" +
+        "<span>Recommends <strong>" + r.recommendation + "/10</strong></span>" +
+        "</div>";
+      const suggs = (f.suggestions || []).map(function (k) {
+        let label = SUGGESTION_LABELS[k] || k;
+        if (k === "other" && f.suggestionOther) label = "Other: " + f.suggestionOther;
+        return '<span class="badge badge-neutral">' + PC.esc(label) + "</span>";
+      });
+      if (suggs.length) item += '<div class="fbadmin-sugg">' + suggs.join("") + "</div>";
+      if (f.comments) item += '<div class="fbadmin-comment">' + PC.esc(f.comments) + "</div>";
+      return item + "</div>";
+    }).join("");
+
+    box.innerHTML = html;
   }
 
   /* ---------------- Questions Tab ---------------- */
