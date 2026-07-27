@@ -519,7 +519,7 @@
                 ${statusBadge}
               </div>
               <p class="small muted" style="margin:2px 0 6px">
-                Headcount: ${org.headcount} &nbsp;·&nbsp; Seats: ${seatBadge}
+                Headcount: ${org.headcount} &nbsp;·&nbsp; Enrolled: <strong>${org.enrolledCount ?? 0}</strong> &nbsp;·&nbsp; Seats: ${seatBadge}
                 ${org.registeredEmail ? `&nbsp;·&nbsp; HR Email: <strong>${PC.esc(org.registeredEmail)}</strong>` : ""}
               </p>
               ${attachedCertLink}
@@ -528,6 +528,9 @@
               ${reviewPanelHtml}
             </div>
             <div class="flex" style="gap:8px; align-items:center; flex-shrink:0">
+              <a href="#" class="btn btn-ghost btn-sm admin-dl-doc-btn"
+                 data-path="/admin/orgs/${org._id}/employees/export"
+                 data-filename="${PC.esc(org.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "organisation")}-employees.csv">⬇ Employees (CSV)</a>
               <button class="btn btn-ghost btn-sm btn-toggle-seats" data-org-id="${org._id}" data-seats-active="${org.seatsActive}">${seatBtnText}</button>
             </div>
           </div>

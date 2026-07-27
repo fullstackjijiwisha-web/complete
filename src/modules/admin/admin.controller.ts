@@ -15,6 +15,7 @@ import { scoreAttempt } from '../scoring/scoring.service';
 import { recomputeReadiness } from '../scoring/readiness.service';
 import { ApiError } from '../../utils/ApiError';
 import { authUser } from '../../utils/authUser';
+import { currentCycle } from '../../utils/ids';
 import { env } from '../../config/env';
 import { scoreBand } from '../../types';
 import { Types } from 'mongoose';
@@ -118,11 +119,20 @@ export const listOrgs: RequestHandler = async (req, res) => {
     Organisation.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit),
   ]);
 
+  // Enrolled = employee accounts that actually exist, as opposed to the
+  // self-declared headcount an org typed in at registration.
+  const enrolledAgg = await User.aggregate<{ _id: Types.ObjectId; n: number }>([
+    { $match: { orgId: { $in: orgs.map((o) => o._id) }, role: 'employee', isDeleted: false } },
+    { $group: { _id: '$orgId', n: { $sum: 1 } } },
+  ]);
+  const enrolledByOrg = new Map(enrolledAgg.map((r) => [r._id.toString(), r.n]));
+
   const orgsWithAudits = await Promise.all(
     orgs.map(async (org) => {
       const audit = await Audit.findOne({ orgId: org._id }).sort({ createdAt: -1 });
       return {
         ...org.toObject(),
+        enrolledCount: enrolledByOrg.get(org.id) ?? 0,
         currentAudit: audit
           ? {
             id: audit._id,
@@ -144,6 +154,59 @@ export const listOrgs: RequestHandler = async (req, res) => {
     data: orgsWithAudits,
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   });
+};
+
+// Super admin: download an organisation's enrolled employees as CSV —
+// roster columns plus this cycle's assessment standing (attempts, best
+// score, certificate). Access is audit-logged.
+export const exportOrgEmployees: RequestHandler = async (req, res) => {
+  const org = await Organisation.findById(req.params.id);
+  if (!org) throw ApiError.notFound();
+
+  const cycle = currentCycle();
+  const employees = await User.find({ orgId: org._id, role: 'employee', isDeleted: false })
+    .sort({ employeeCode: 1 })
+    .select('name email whatsapp employeeCode status');
+  const userIds = employees.map((e) => e._id);
+  const [certs, scoredBest] = await Promise.all([
+    Certificate.find({ userId: { $in: userIds }, cycle, revoked: false }).select('userId certId score'),
+    AssessmentAttempt.aggregate<{ _id: Types.ObjectId; bestScore: number; attempts: number }>([
+      { $match: { userId: { $in: userIds }, cycle, status: 'scored' } },
+      { $group: { _id: '$userId', bestScore: { $max: '$score' }, attempts: { $sum: 1 } } },
+    ]),
+  ]);
+  const certByUser = new Map(certs.map((c) => [c.userId.toString(), c]));
+  const bestByUser = new Map(scoredBest.map((r) => [r._id.toString(), r]));
+
+  const quote = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  let csv = 'employeeCode,name,email,whatsapp,inviteStatus,attemptsThisCycle,bestScore,certified,certificateId\n';
+  for (const e of employees) {
+    const id = e._id.toString();
+    const cert = certByUser.get(id);
+    const best = bestByUser.get(id);
+    csv +=
+      [
+        e.employeeCode ?? '',
+        quote(e.name),
+        e.email,
+        e.whatsapp ?? '',
+        e.status ?? '',
+        String(best?.attempts ?? 0),
+        best?.bestScore != null ? String(best.bestScore) : '',
+        cert ? 'yes' : 'no',
+        cert?.certId ?? '',
+      ].join(',') + '\n';
+  }
+
+  await logAudit('admin.org_employees_exported', 'Organisation', org.id, authUser(req).id, {
+    employees: employees.length,
+  });
+  const safeName =
+    org.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'organisation';
+  res
+    .type('text/csv')
+    .setHeader('Content-Disposition', `attachment; filename="${safeName}-employees.csv"`)
+    .send(csv);
 };
 
 export const patchOrg: RequestHandler = async (req, res) => {

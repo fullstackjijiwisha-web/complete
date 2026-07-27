@@ -57,6 +57,8 @@ adminRoutes.patch('/questions/:id', validate(questionBaseSchema.partial()), cont
 adminRoutes.delete('/questions/:id', controller.deleteQuestion);
 
 adminRoutes.get('/orgs', controller.listOrgs);
+// Roster + assessment-standing CSV of one organisation's enrolled employees.
+adminRoutes.get('/orgs/:id/employees/export', controller.exportOrgEmployees);
 adminRoutes.patch(
   '/orgs/:id',
   validate(z.object({ seatsActive: z.boolean().optional(), isDeleted: z.boolean().optional() })),
