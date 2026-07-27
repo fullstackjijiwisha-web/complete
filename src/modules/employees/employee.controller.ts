@@ -190,15 +190,28 @@ export const removeEmployee: RequestHandler = async (req, res) => {
   res.json({ success: true, data: { removed: true } });
 };
 
-// Returns a blank CSV template so HR admins know the required column headers
-// and format before attempting an import. No auth data in the template.
-export const downloadImportTemplate: RequestHandler = (_req, res) => {
-  const header = 'name,email,whatsapp\n';
-  const example = '"Priya Sharma",priya.sharma@example.com,+919876543210\n';
+// Downloads the organisation's CURRENT roster as CSV in the exact column
+// format the importer accepts (name,email,whatsapp) — it doubles as the
+// import template. Only when the roster is empty does it fall back to a
+// clearly-labelled example row so HR still sees the expected format.
+export const downloadImportTemplate: RequestHandler = async (req, res) => {
+  const orgId = new Types.ObjectId(authOrgId(req));
+  const employees = await User.find({ orgId, role: 'employee', isDeleted: false })
+    .sort({ employeeCode: 1 })
+    .select('name email whatsapp');
+
+  let csv = 'name,email,whatsapp\n';
+  if (employees.length) {
+    for (const e of employees) {
+      csv += `"${e.name.replace(/"/g, '""')}",${e.email},${e.whatsapp ?? ''}\n`;
+    }
+  } else {
+    csv += '"Example Employee (replace this row)",employee@example.com,+919876543210\n';
+  }
   res
     .type('text/csv')
-    .setHeader('Content-Disposition', 'attachment; filename="employee-import-template.csv"')
-    .send(header + example);
+    .setHeader('Content-Disposition', 'attachment; filename="employee-roster.csv"')
+    .send(csv);
 };
 
 // Exposes a downloadable CSV error report of the last CSV bulk upload.

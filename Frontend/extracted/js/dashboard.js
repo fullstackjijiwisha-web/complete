@@ -183,7 +183,7 @@
       '<div class="chart-card mb-3"><div class="c-head"><div><div class="c-title">Employee roster</div>' +
       '<div class="c-sub">Enrol employees below — each receives a personal invite link' +
       ' <span class="mono">(dev without SMTP: links print in the backend console)</span></div></div>' +
-      '<button class="btn btn-ghost btn-sm" id="btn-download-template" style="margin-right:8px">⬇ Download Template</button>' +
+      '<button class="btn btn-ghost btn-sm" id="btn-download-template" style="margin-right:8px">⬇ Download Roster (CSV)</button>' +
       '<button class="btn btn-ghost btn-sm" id="btn-import-csv">⬆ Import CSV</button></div>' +
       '<form class="flex mt-2" id="enrol-form" style="flex-wrap:wrap;gap:10px">' +
       '<input name="name" required minlength="2" placeholder="Full name" style="flex:1;min-width:150px">' +
@@ -378,7 +378,7 @@
     const dlTemplateBtn = document.getElementById("btn-download-template");
     if (dlTemplateBtn) {
       dlTemplateBtn.addEventListener("click", function () {
-        PC.downloadFile("/orgs/me/employees/import/template", "employee-import-template.csv");
+        PC.downloadFile("/orgs/me/employees/import/template", "employee-roster.csv");
       });
     }
 
