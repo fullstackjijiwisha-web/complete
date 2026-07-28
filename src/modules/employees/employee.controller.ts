@@ -137,6 +137,62 @@ export const importEmployees: RequestHandler = async (req, res) => {
   });
 };
 
+// Bulk re-invite: fresh links + emails for every employee still in 'invited'
+// status (i.e. never activated — the state a quota-dropped invite leaves them
+// in). Works in small batches so a serverless request can never time out
+// mid-run: the dashboard calls this in a loop, passing `skip` as a cursor
+// over the employeeCode-ordered pending list, until `remaining` hits 0.
+const RESEND_BATCH_MAX = 25;
+const RESEND_CONCURRENCY = 5;
+
+export const resendPendingInvites: RequestHandler = async (req, res) => {
+  const orgId = authOrgId(req);
+  const org = await Organisation.findById(orgId);
+  if (!org) throw ApiError.notFound();
+
+  const filter = {
+    orgId: new Types.ObjectId(orgId),
+    role: 'employee' as const,
+    isDeleted: false,
+    status: 'invited' as const,
+  };
+  const skip = Math.max(0, Number(req.body?.skip) || 0);
+  const totalPending = await User.countDocuments(filter);
+  const batch = await User.find(filter)
+    .sort({ employeeCode: 1 })
+    .skip(skip)
+    .limit(RESEND_BATCH_MAX)
+    .select('email whatsapp employeeCode');
+
+  const originUrl = req.protocol + '://' + req.get('host');
+  let resent = 0;
+  for (let i = 0; i < batch.length; i += RESEND_CONCURRENCY) {
+    const results = await Promise.allSettled(
+      batch
+        .slice(i, i + RESEND_CONCURRENCY)
+        .map((e) => issueInvite(e.id, orgId, e.email, org.name, e.whatsapp, originUrl)),
+    );
+    resent += results.filter((r) => r.status === 'fulfilled').length;
+  }
+
+  if (resent > 0) {
+    await logAudit('employee.invites_bulk_resent', 'Organisation', orgId, authUser(req).id, {
+      resent,
+      skip,
+      totalPending,
+    });
+  }
+  res.json({
+    success: true,
+    data: {
+      totalPending,
+      batchCount: batch.length,
+      resentCount: resent,
+      remaining: Math.max(0, totalPending - skip - batch.length),
+    },
+  });
+};
+
 export const resendInvite: RequestHandler = async (req, res) => {
   const orgId = authOrgId(req);
   const employee = await User.findOne({

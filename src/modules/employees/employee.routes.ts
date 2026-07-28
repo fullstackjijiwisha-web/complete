@@ -31,6 +31,14 @@ employeeRoutes.post(
   express.text({ type: ['text/csv', 'text/plain'], limit: '2mb' }),
   controller.importEmployees,
 );
+// Bulk resend for everyone still 'invited' — batched via a `skip` cursor;
+// the dashboard loops until `remaining` is 0, so ALL pending get a fresh
+// invite regardless of how many there are.
+employeeRoutes.post(
+  '/resend-pending-invites',
+  validate(z.object({ skip: z.coerce.number().int().min(0).optional() })),
+  controller.resendPendingInvites,
+);
 employeeRoutes.post('/:id/resend-invite', controller.resendInvite);
 employeeRoutes.patch('/:id/approve-reattempt', controller.approveReattempt);
 employeeRoutes.delete('/:id', controller.removeEmployee);

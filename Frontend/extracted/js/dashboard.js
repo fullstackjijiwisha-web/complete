@@ -170,7 +170,11 @@
       '<div class="card-grid cols-3 mb-3">' +
       attnTile("Invites not yet accepted", invitesPending,
         "Enrolled employees who haven't activated their account. Resend from the roster below.",
-        invitesPending === 0 ? "good" : "warning") +
+        invitesPending === 0 ? "good" : "warning",
+        invitesPending > 0
+          ? '<button class="btn btn-orange btn-sm mt-1" id="btn-resend-pending">↻ Resend all pending invites</button>' +
+            '<div class="small muted mt-1" id="resend-progress"></div>'
+          : "") +
       attnTile("Assessed but not certified", notCertified,
         "Best score below the certification threshold — re-attempts draw a rotated paper.",
         notCertified === 0 ? "good" : "warning") +
@@ -241,6 +245,9 @@
         }
       }
     });
+
+    const resendAll = document.getElementById("btn-resend-pending");
+    if (resendAll) resendAll.addEventListener("click", resendPendingInvites);
 
     wireEnrolForm();
     wireCsvImport();
@@ -371,6 +378,44 @@
     });
   }
 
+  /* Bulk resend: fresh invite links + emails for EVERY employee still in
+     "invited" status. The server processes small batches per request (so a
+     serverless timeout can never cut a batch short) and this loop keeps
+     calling until nobody is left — no cap on how many are resent. */
+  async function resendPendingInvites() {
+    const btn = document.getElementById("btn-resend-pending");
+    const prog = document.getElementById("resend-progress");
+    if (!confirm(
+      "Resend invite emails to every employee who hasn't activated their account yet?\n\n" +
+      "Each gets a fresh link (their old link stops working). If your email plan rejects " +
+      "some sends, those employees simply stay pending — running this again is safe."
+    )) return;
+    btn.disabled = true;
+    let skip = 0;
+    let resent = 0;
+    try {
+      for (;;) {
+        const r = await PC.api("/orgs/me/employees/resend-pending-invites", {
+          method: "POST",
+          body: { skip: skip },
+        });
+        resent += r.resentCount;
+        skip += r.batchCount;
+        if (prog) prog.textContent = "Resent " + resent + " of " + r.totalPending + "…";
+        if (r.remaining <= 0 || r.batchCount === 0) break;
+      }
+      if (prog) prog.textContent = "";
+      PC.alertModal("Invites resent",
+        resent + " invite email" + (resent === 1 ? "" : "s") + " resent with fresh links. " +
+        "Employees who already activated were not touched.");
+    } catch (e) {
+      PC.alertModal("Resend stopped", PC.esc(e.message) +
+        (resent ? "<br>" + resent + " invites had already been resent before the error — running it again continues safely." : ""));
+    }
+    btn.disabled = false;
+    load();
+  }
+
   function wireCsvImport() {
     const fileInput = document.getElementById("csv-file");
     document.getElementById("btn-import-csv").addEventListener("click", function () { fileInput.click(); });
@@ -420,14 +465,14 @@
       '</div><div class="t-delta">' + delta + "</div></div>";
   }
 
-  function attnTile(label, value, desc, level) {
+  function attnTile(label, value, desc, level, extraHtml) {
     const badge =
       level === "good" ? '<span class="badge badge-good">✓ Clear</span>' :
       level === "warning" ? '<span class="badge badge-warning">▲ Follow up</span>' :
       '<span class="badge badge-serious">⚑ Needs attention</span>';
     return '<div class="tile"><div class="flex spread"><div class="t-label">' + label + "</div>" + badge + "</div>" +
       '<div class="t-value">' + value.toLocaleString("en-IN") + "</div>" +
-      '<p class="small muted mt-1">' + desc + "</p></div>";
+      '<p class="small muted mt-1">' + desc + "</p>" + (extraHtml || "") + "</div>";
   }
 
   function trackStep(done, n, title, sub) {
