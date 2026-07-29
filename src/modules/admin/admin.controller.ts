@@ -5,6 +5,8 @@ import { Organisation } from '../organisations/organisation.model';
 import { OrgWipeBackup } from '../organisations/orgWipeBackup.model';
 import { previewOrganisationWipe, wipeAllOrganisations } from '../organisations/organisation.reset';
 import { User } from '../users/user.model';
+import { Invite } from '../auth/invite.model';
+import { issueInvite } from '../employees/employee.service';
 import { Audit, AuditSlot } from '../audits/audit.model';
 import { AuditLog, logAudit } from '../auditlog/auditLog.model';
 import { PublicStats } from '../stats/publicStats.model';
@@ -153,6 +155,124 @@ export const listOrgs: RequestHandler = async (req, res) => {
     success: true,
     data: orgsWithAudits,
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+  });
+};
+
+// Super admin: invite delivery & assessment progress for one organisation.
+// "Pending – expired link" are employees still in 'invited' status with no
+// live invite token (expired ones are TTL-swept) — whatever link is in their
+// inbox shows "Invite link is invalid or has expired" and needs a resend.
+export const orgInviteStatus: RequestHandler = async (req, res) => {
+  const org = await Organisation.findById(req.params.id);
+  if (!org) throw ApiError.notFound();
+  const cycle = currentCycle();
+
+  const employees = await User.find({ orgId: org._id, role: 'employee', isDeleted: false }).select(
+    'status email employeeCode',
+  );
+  const pending = employees.filter((e) => e.status === 'invited');
+  const invites = await Invite.find({ userId: { $in: pending.map((p) => p._id) } }).select(
+    'userId expiresAt',
+  );
+  const now = Date.now();
+  const liveSet = new Set(
+    invites.filter((i) => i.expiresAt.getTime() > now).map((i) => i.userId.toString()),
+  );
+  const pendingExpired = pending.filter((p) => !liveSet.has(p._id.toString()));
+
+  const [completedUserIds, certified] = await Promise.all([
+    AssessmentAttempt.distinct('userId', { orgId: org._id, cycle, status: 'scored' }),
+    Certificate.countDocuments({ orgId: org._id, cycle, revoked: false }),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      orgName: org.name,
+      enrolled: employees.length,
+      activated: employees.length - pending.length,
+      completedTest: completedUserIds.length,
+      certified,
+      pendingTotal: pending.length,
+      pendingLive: pending.length - pendingExpired.length,
+      pendingExpired: pendingExpired.length,
+      pendingExpiredEmails: pendingExpired.slice(0, 500).map((p) => p.email),
+    },
+  });
+};
+
+// Super admin: resend invites for ONE organisation, batched (25/request) so a
+// serverless request can never time out mid-run. scope 'expired' targets only
+// employees whose link is dead — that set shrinks as we resend, so each call
+// simply takes the first 25 still-expired (no cursor). scope 'all_pending'
+// walks the stable employeeCode-ordered pending list with a `skip` cursor.
+const ADMIN_RESEND_BATCH = 25;
+const ADMIN_RESEND_CONCURRENCY = 5;
+
+export const adminResendOrgInvites: RequestHandler = async (req, res) => {
+  const org = await Organisation.findById(req.params.id);
+  if (!org) throw ApiError.notFound();
+  const scope = req.body.scope as 'expired' | 'all_pending';
+  const skip = Math.max(0, Number(req.body?.skip) || 0);
+
+  const pendingFilter = {
+    orgId: org._id,
+    role: 'employee' as const,
+    isDeleted: false,
+    status: 'invited' as const,
+  };
+
+  let totalTargets: number;
+  let batch: Array<{ id: string; email: string; whatsapp?: string }>;
+  let remaining: number;
+
+  if (scope === 'all_pending') {
+    totalTargets = await User.countDocuments(pendingFilter);
+    const docs = await User.find(pendingFilter)
+      .sort({ employeeCode: 1 })
+      .skip(skip)
+      .limit(ADMIN_RESEND_BATCH)
+      .select('email whatsapp');
+    batch = docs.map((d) => ({ id: d.id, email: d.email, whatsapp: d.whatsapp }));
+    remaining = Math.max(0, totalTargets - skip - batch.length);
+  } else {
+    const pending = await User.find(pendingFilter).sort({ employeeCode: 1 }).select('email whatsapp');
+    const invites = await Invite.find({ userId: { $in: pending.map((p) => p._id) } }).select(
+      'userId expiresAt',
+    );
+    const nowMs = Date.now();
+    const liveSet = new Set(
+      invites.filter((i) => i.expiresAt.getTime() > nowMs).map((i) => i.userId.toString()),
+    );
+    const expired = pending.filter((p) => !liveSet.has(p._id.toString()));
+    totalTargets = expired.length;
+    batch = expired
+      .slice(0, ADMIN_RESEND_BATCH)
+      .map((d) => ({ id: d.id, email: d.email, whatsapp: d.whatsapp }));
+    remaining = Math.max(0, totalTargets - batch.length);
+  }
+
+  const originUrl = req.protocol + '://' + req.get('host');
+  let resent = 0;
+  for (let i = 0; i < batch.length; i += ADMIN_RESEND_CONCURRENCY) {
+    const results = await Promise.allSettled(
+      batch
+        .slice(i, i + ADMIN_RESEND_CONCURRENCY)
+        .map((e) => issueInvite(e.id, org.id, e.email, org.name, e.whatsapp, originUrl)),
+    );
+    resent += results.filter((r) => r.status === 'fulfilled').length;
+  }
+
+  if (resent > 0) {
+    await logAudit('admin.org_invites_resent', 'Organisation', org.id, authUser(req).id, {
+      scope,
+      resent,
+      totalTargets,
+    });
+  }
+  res.json({
+    success: true,
+    data: { totalTargets, batchCount: batch.length, resentCount: resent, remaining },
   });
 };
 

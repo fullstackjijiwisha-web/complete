@@ -59,6 +59,20 @@ adminRoutes.delete('/questions/:id', controller.deleteQuestion);
 adminRoutes.get('/orgs', controller.listOrgs);
 // Roster + assessment-standing CSV of one organisation's enrolled employees.
 adminRoutes.get('/orgs/:id/employees/export', controller.exportOrgEmployees);
+// Invite delivery & progress counts for one organisation, and org-scoped
+// batched resend (scope 'expired' = only dead links; 'all_pending' = everyone
+// not yet activated).
+adminRoutes.get('/orgs/:id/invite-status', controller.orgInviteStatus);
+adminRoutes.post(
+  '/orgs/:id/resend-invites',
+  validate(
+    z.object({
+      scope: z.enum(['expired', 'all_pending']),
+      skip: z.coerce.number().int().min(0).optional(),
+    }),
+  ),
+  controller.adminResendOrgInvites,
+);
 adminRoutes.patch(
   '/orgs/:id',
   validate(z.object({ seatsActive: z.boolean().optional(), isDeleted: z.boolean().optional() })),

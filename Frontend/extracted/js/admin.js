@@ -526,8 +526,10 @@
               ${evidencePackHtml}
               ${checklistHtml}
               ${reviewPanelHtml}
+              <div id="invite-status-${org._id}"></div>
             </div>
             <div class="flex" style="gap:8px; align-items:center; flex-shrink:0">
+              <button class="btn btn-ghost btn-sm admin-invite-status" data-org-id="${org._id}">📶 Invite status</button>
               <a href="#" class="btn btn-ghost btn-sm admin-dl-doc-btn"
                  data-path="/admin/orgs/${org._id}/employees/export"
                  data-filename="${PC.esc(org.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "organisation")}-employees.csv">⬇ Employees (CSV)</a>
@@ -612,6 +614,86 @@
         PC.downloadFile(btn.dataset.path, btn.dataset.filename);
       });
     });
+
+    document.querySelectorAll(".admin-invite-status").forEach(btn => {
+      btn.addEventListener("click", () => loadInviteStatus(btn.dataset.orgId));
+    });
+  }
+
+  /* ── Invite delivery panel: who activated, who completed the test, and who
+     is stuck on a dead link ("Invite link is invalid or has expired") — with
+     org-scoped batched resend so no other organisation is ever touched. ── */
+  async function loadInviteStatus(orgId) {
+    const box = document.getElementById("invite-status-" + orgId);
+    if (!box) return;
+    box.innerHTML = '<p class="small muted mt-2">Loading invite status…</p>';
+    let d;
+    try {
+      d = await PC.api("/admin/orgs/" + orgId + "/invite-status");
+    } catch (e) {
+      box.innerHTML = '<p class="small mt-2" style="color:#dc2626">' + PC.esc(e.message) + "</p>";
+      return;
+    }
+    const stat = (num, lbl) =>
+      '<div class="fbadmin-tile"><div class="num">' + num + '</div><div class="lbl">' + lbl + "</div></div>";
+    box.innerHTML =
+      '<div class="mt-2" style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px;">' +
+      '<h4 class="small" style="margin:0 0 8px; font-weight:700; color:var(--green-900)">📶 Invite delivery & progress</h4>' +
+      '<div class="fbadmin-stats" style="margin-bottom:10px">' +
+      stat(d.enrolled, "Enrolled") +
+      stat(d.activated, "Activated account") +
+      stat(d.completedTest, "Completed the test") +
+      stat(d.certified, "Certified") +
+      stat(d.pendingLive, "Pending — link OK") +
+      stat(d.pendingExpired, "Pending — link expired") +
+      "</div>" +
+      (d.pendingExpired > 0
+        ? '<p class="small muted" style="margin:0 0 8px">The ' + d.pendingExpired +
+          ' employee' + (d.pendingExpired === 1 ? "" : "s") + ' under “link expired” see ' +
+          '<em>“Invite link is invalid or has expired”</em> — resend below to give them working links.</p>'
+        : "") +
+      '<div class="flex" style="gap:8px; flex-wrap:wrap; align-items:center">' +
+      '<button class="btn btn-sm btn-orange adm-resend" data-org-id="' + orgId + '" data-scope="expired"' +
+      (d.pendingExpired === 0 ? " disabled" : "") + ">↻ Resend expired links (" + d.pendingExpired + ")</button>" +
+      '<button class="btn btn-sm btn-ghost adm-resend" data-org-id="' + orgId + '" data-scope="all_pending"' +
+      (d.pendingTotal === 0 ? " disabled" : "") + ">↻ Resend ALL pending (" + d.pendingTotal + ")</button>" +
+      '<span class="small muted" id="adm-resend-prog-' + orgId + '"></span>' +
+      "</div></div>";
+
+    box.querySelectorAll(".adm-resend").forEach(btn => {
+      btn.addEventListener("click", () => adminResendInvites(btn.dataset.orgId, btn.dataset.scope));
+    });
+  }
+
+  async function adminResendInvites(orgId, scope) {
+    const what = scope === "expired"
+      ? "only the employees whose invite link has expired"
+      : "EVERY employee of this organisation who hasn't activated yet";
+    if (!confirm("Resend invite emails to " + what + "?\n\nEach gets a fresh link and any older link in their inbox stops working. Only this organisation is affected. Safe to run again if some sends are dropped.")) return;
+
+    const prog = document.getElementById("adm-resend-prog-" + orgId);
+    const box = document.getElementById("invite-status-" + orgId);
+    box.querySelectorAll(".adm-resend").forEach(b => { b.disabled = true; });
+    let skip = 0;
+    let resent = 0;
+    try {
+      for (;;) {
+        const r = await PC.api("/admin/orgs/" + orgId + "/resend-invites", {
+          method: "POST",
+          body: scope === "all_pending" ? { scope: scope, skip: skip } : { scope: scope },
+        });
+        resent += r.resentCount;
+        skip += r.batchCount;
+        if (prog) prog.textContent = "Resent " + resent + " of " + r.totalTargets + "…";
+        if (r.remaining <= 0 || r.batchCount === 0) break;
+      }
+      PC.alertModal("Invites resent", resent + " invite email" + (resent === 1 ? "" : "s") +
+        " resent with fresh links for this organisation. Employees who already activated were not touched.");
+    } catch (e) {
+      PC.alertModal("Resend stopped", PC.esc(e.message) +
+        (resent ? "<br>" + resent + " invites were already resent — running it again continues safely." : ""));
+    }
+    loadInviteStatus(orgId);
   }
 
   /* ---------------- PC API handlers (attached to window.PC) ---------------- */
