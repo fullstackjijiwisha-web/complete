@@ -111,10 +111,18 @@ export function createApp(): Express {
   // provider has accepted yet, so triggering it is harmless.
   app.get('/api/v1/cron/invite-drain', async (req, res, next) => {
     try {
+      // Fail closed: only Vercel's scheduler (which sets x-vercel-cron on the
+      // platform side, so it cannot be spoofed from outside) or a caller
+      // holding CRON_SECRET may trigger a run. Otherwise anyone could burn
+      // the mail allowance by hammering this endpoint.
       const secret = env.CRON_SECRET;
-      const header = req.headers.authorization ?? '';
-      if (secret && header !== `Bearer ${secret}`) {
-        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid cron secret' } });
+      const fromVercelCron = Boolean(req.headers['x-vercel-cron']);
+      const secretOk = Boolean(secret) && req.headers.authorization === `Bearer ${secret}`;
+      if (!fromVercelCron && !secretOk) {
+        res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Scheduled runs only' },
+        });
         return;
       }
       const originUrl = `${req.protocol}://${req.get('host')}`;
