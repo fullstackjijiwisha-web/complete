@@ -28,6 +28,13 @@ const envSchema = z.object({
   // Brevo transactional email HTTP API key (xkeysib-…). Preferred over SMTP on
   // hosts that block outbound SMTP ports (e.g. Render) — it sends over HTTPS.
   BREVO_API_KEY: z.string().optional(),
+  // Extra Brevo keys (comma-separated). Each account carries its own daily
+  // sending allowance, so listing more keys raises the ceiling: a send that
+  // one account rejects (quota) is retried on the next automatically.
+  BREVO_API_KEYS: z.string().optional(),
+  // Shared secret for the scheduled invite-retry endpoint (Vercel Cron sends
+  // it as `Authorization: Bearer <CRON_SECRET>`).
+  CRON_SECRET: z.string().optional(),
   EMAIL_FROM: z.string().default('noreply@jijiwishasociety.org'),
   // Jijiwisha ops inbox — CC'd on every issued certificate and on POSH Ready.
   JIJIWISHA_NOTIFY_EMAIL: z.string().default('fullstackjijiwisha@gmail.com'),

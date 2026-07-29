@@ -385,11 +385,14 @@
   async function resendPendingInvites() {
     const btn = document.getElementById("btn-resend-pending");
     const prog = document.getElementById("resend-progress");
-    if (!confirm(
-      "Resend invite emails to every employee who hasn't activated their account yet?\n\n" +
-      "Each gets a fresh link (their old link stops working). If your email plan rejects " +
-      "some sends, those employees simply stay pending — running this again is safe."
-    )) return;
+    const ok = await PC.confirmModal(
+      "Resend pending invites",
+      "Send a fresh invite email to every employee who hasn't activated their account yet." +
+      "<br><br>Links already in their inbox keep working. If the mail plan rejects some sends, " +
+      "those employees stay pending and the panel keeps tracking them — running this again is safe.",
+      "Send invites",
+    );
+    if (!ok) return;
     btn.disabled = true;
     let skip = 0;
     let delivered = 0;

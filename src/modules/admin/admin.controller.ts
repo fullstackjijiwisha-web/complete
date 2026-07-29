@@ -260,7 +260,11 @@ export const adminResendOrgInvites: RequestHandler = async (req, res) => {
     batch = docs.map((d) => ({ id: d.id, email: d.email, whatsapp: d.whatsapp }));
     remaining = Math.max(0, totalTargets - skip - batch.length);
   } else if (scope === 'failed') {
-    const failedFilter = { ...pendingFilter, inviteDelivery: 'failed' as const };
+    // Everyone whose invite email no provider has confirmed accepting —
+    // rejected sends AND employees invited before delivery tracking existed
+    // ($ne also matches a missing field). These are exactly the people who
+    // report "I never received anything".
+    const failedFilter = { ...pendingFilter, inviteDelivery: { $ne: 'sent' as const } };
     totalTargets = await User.countDocuments(failedFilter);
     const docs = await User.find(failedFilter)
       .sort({ employeeCode: 1 })

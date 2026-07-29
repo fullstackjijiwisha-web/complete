@@ -9,5 +9,8 @@
   ],
   "routes": [
     { "src": "/(.*)", "dest": "api/index.ts" }
+  ],
+  "crons": [
+    { "path": "/api/v1/cron/invite-drain", "schedule": "0 3 * * *" }
   ]
 }

@@ -700,6 +700,37 @@
   }
   PC.alertModal = alertModal;
 
+  /* In-page confirmation. Never use window.confirm() for an action the user
+     may repeat: after a few native dialogs Chrome offers "Prevent this page
+     from creating additional dialogs", and once ticked every later confirm()
+     returns false instantly — the button then looks completely dead. */
+  PC.confirmModal = function (title, html, okLabel) {
+    return new Promise(function (resolve) {
+      const m = document.createElement("div");
+      m.className = "modal-overlay open";
+      m.innerHTML =
+        '<div class="modal" style="max-width:520px"><button class="close" data-x aria-label="Close">✕</button>' +
+        "<h2>" + title + "</h2>" +
+        '<p class="small muted mt-1">' + html + "</p>" +
+        '<div class="flex mt-3" style="gap:8px; justify-content:flex-end">' +
+        '<button class="btn btn-ghost btn-sm" data-no>Cancel</button>' +
+        '<button class="btn btn-orange btn-sm" data-yes>' + (okLabel || "Continue") + "</button>" +
+        "</div></div>";
+      document.body.appendChild(m);
+      let done = false;
+      function finish(v) {
+        if (done) return;
+        done = true;
+        m.remove();
+        resolve(v);
+      }
+      m.addEventListener("click", function (e) {
+        if (e.target.closest("[data-yes]")) return finish(true);
+        if (e.target.closest("[data-no]") || e.target.closest("[data-x]") || e.target === m) return finish(false);
+      });
+    });
+  };
+
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       if (document.querySelector('script[src="' + src + '"]')) return resolve();

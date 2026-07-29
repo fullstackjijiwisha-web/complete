@@ -3,35 +3,15 @@ import type { Transporter } from 'nodemailer';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
-// Delivery mode is chosen once at startup, in priority order:
-//   1. Brevo HTTP API (BREVO_API_KEY) — sends over HTTPS:443, so it works on
-//      hosts that block outbound SMTP ports (Render, many PaaS). Preferred.
-//   2. SMTP (SMTP_HOST/USER/PASS) — works locally / on hosts that allow SMTP.
-//   3. Neither — emails are logged, not sent (local dev without config).
-const brevoApiKey = env.BREVO_API_KEY;
-let transporter: Transporter | null = null;
-
-if (brevoApiKey) {
-  logger.info('Email via Brevo HTTP API — emails WILL be sent', { from: env.EMAIL_FROM });
-} else if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
-  transporter = nodemailer.createTransport({
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT ?? 465,
-    secure: (env.SMTP_PORT ?? 465) === 465,
-    auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
-  });
-  logger.info('Email via SMTP — emails WILL be sent', {
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT ?? 465,
-    from: env.EMAIL_FROM,
-  });
-} else {
-  logger.warn('Email NOT configured — emails are LOGGED, not sent. Set BREVO_API_KEY (recommended on Render) or SMTP_*', {
-    BREVO_API_KEY: brevoApiKey ? 'set' : 'MISSING',
-    SMTP_HOST: env.SMTP_HOST ? 'set' : 'MISSING',
-    SMTP_USER: env.SMTP_USER ? 'set' : 'MISSING',
-    SMTP_PASS: env.SMTP_PASS ? 'set' : 'MISSING',
-  });
+// Delivery is attempted across EVERY configured provider in order, so one
+// account's daily allowance is not the whole platform's ceiling: a send the
+// first provider rejects (typically "daily limit reached") is retried on the
+// next one automatically. Configure as many as needed —
+//   BREVO_API_KEY + BREVO_API_KEYS (comma-separated extra keys), then SMTP.
+// With none configured, messages are logged instead of sent (local dev).
+interface Provider {
+  name: string;
+  send: (message: EmailMessage) => Promise<void>;
 }
 
 export interface EmailMessage {
@@ -42,6 +22,15 @@ export interface EmailMessage {
   attachments?: Array<{ filename: string; content: Buffer }>;
 }
 
+// Outcome of an attempted send. 'logged' means no provider is configured
+// (local dev) — the message was written to the log instead of delivered.
+export interface EmailResult {
+  delivered: boolean;
+  mode: 'sent' | 'logged' | 'failed';
+  provider?: string;
+  error?: string;
+}
+
 function ccList(cc?: string | string[]): Array<{ email: string }> {
   if (!cc) return [];
   return (Array.isArray(cc) ? cc : [cc]).filter(Boolean).map((email) => ({ email }));
@@ -49,7 +38,7 @@ function ccList(cc?: string | string[]): Array<{ email: string }> {
 
 // Brevo transactional email over HTTPS — the sender (EMAIL_FROM) must be a
 // verified sender in the Brevo account, or Brevo returns a 400.
-async function sendViaBrevo(message: EmailMessage): Promise<void> {
+async function sendViaBrevo(apiKey: string, message: EmailMessage): Promise<void> {
   const cc = ccList(message.cc);
   const attachmentsMapped = message.attachments?.map((a) => ({
     name: a.filename,
@@ -59,7 +48,7 @@ async function sendViaBrevo(message: EmailMessage): Promise<void> {
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
-      'api-key': brevoApiKey as string,
+      'api-key': apiKey,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
@@ -74,16 +63,63 @@ async function sendViaBrevo(message: EmailMessage): Promise<void> {
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
-    throw new Error(`Brevo API ${res.status}: ${detail}`);
+    throw new Error(`Brevo API ${res.status}: ${detail.slice(0, 200)}`);
   }
 }
 
-// Outcome of an attempted send. 'logged' means no provider is configured
-// (local dev) — the message was written to the log instead of delivered.
-export interface EmailResult {
-  delivered: boolean;
-  mode: 'sent' | 'logged' | 'failed';
-  error?: string;
+function buildProviders(): Provider[] {
+  const list: Provider[] = [];
+  const keys = [env.BREVO_API_KEY, ...(env.BREVO_API_KEYS ?? '').split(',')]
+    .map((k) => (k ?? '').trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  keys.forEach((key, i) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    list.push({
+      name: `brevo${i === 0 ? '' : `#${i + 1}`}`,
+      send: (message) => sendViaBrevo(key, message),
+    });
+  });
+
+  if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
+    const transporter: Transporter = nodemailer.createTransport({
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT ?? 465,
+      secure: (env.SMTP_PORT ?? 465) === 465,
+      auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+    });
+    list.push({
+      name: 'smtp',
+      send: async (message) => {
+        await transporter.sendMail({ from: env.EMAIL_FROM, ...message });
+      },
+    });
+  }
+  return list;
+}
+
+const providers = buildProviders();
+
+if (providers.length) {
+  logger.info('Email delivery configured — emails WILL be sent', {
+    providers: providers.map((p) => p.name).join(', '),
+    from: env.EMAIL_FROM,
+  });
+} else {
+  logger.warn(
+    'Email NOT configured — emails are LOGGED, not sent. Set BREVO_API_KEY (and optionally BREVO_API_KEYS for more daily capacity) or SMTP_*',
+    {
+      BREVO_API_KEY: 'MISSING',
+      SMTP_HOST: env.SMTP_HOST ? 'set' : 'MISSING',
+      SMTP_USER: env.SMTP_USER ? 'set' : 'MISSING',
+      SMTP_PASS: env.SMTP_PASS ? 'set' : 'MISSING',
+    },
+  );
+}
+
+export function emailProviderNames(): string[] {
+  return providers.map((p) => p.name);
 }
 
 // Best-effort: a delivery failure is logged and REPORTED to the caller, never
@@ -91,7 +127,7 @@ export interface EmailResult {
 // Callers that care — invites especially — record the outcome so operators can
 // see who actually received their email instead of guessing.
 export async function sendEmail(message: EmailMessage): Promise<EmailResult> {
-  if (!brevoApiKey && !transporter) {
+  if (!providers.length) {
     logger.info('Email (log mode — not sent)', {
       to: message.to,
       cc: message.cc,
@@ -101,16 +137,24 @@ export async function sendEmail(message: EmailMessage): Promise<EmailResult> {
     });
     return { delivered: false, mode: 'logged' };
   }
-  try {
-    if (brevoApiKey) {
-      await sendViaBrevo(message);
-    } else if (transporter) {
-      await transporter.sendMail({ from: env.EMAIL_FROM, ...message });
+
+  const errors: string[] = [];
+  for (const provider of providers) {
+    try {
+      await provider.send(message);
+      if (errors.length) {
+        logger.info('Email delivered on a fallback provider', {
+          to: message.to,
+          provider: provider.name,
+          afterFailures: errors.length,
+        });
+      }
+      return { delivered: true, mode: 'sent', provider: provider.name };
+    } catch (err) {
+      const detail = `${provider.name}: ${(err as Error).message}`;
+      errors.push(detail);
+      logger.error('Email send failed on provider', { to: message.to, message: detail });
     }
-    return { delivered: true, mode: 'sent' };
-  } catch (err) {
-    const detail = (err as Error).message;
-    logger.error('Email send failed', { to: message.to, message: detail });
-    return { delivered: false, mode: 'failed', error: detail.slice(0, 300) };
   }
+  return { delivered: false, mode: 'failed', error: errors.join(' | ').slice(0, 300) };
 }

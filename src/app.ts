@@ -18,6 +18,7 @@ import { organisationRoutes } from './modules/organisations/organisation.routes'
 import { employeeRoutes } from './modules/employees/employee.routes';
 import { assessmentRoutes } from './modules/assessments/assessment.routes';
 import { feedbackRoutes } from './modules/feedback/feedback.routes';
+import { drainUndeliveredInvites } from './modules/employees/invite.drain';
 import { certificateRoutes } from './modules/certificates/certificate.routes';
 import { auditRoutes } from './modules/audits/audit.routes';
 import { paymentRoutes } from './modules/payments/payment.routes';
@@ -105,6 +106,25 @@ export function createApp(): Express {
       },
     });
   });
+  // Scheduled invite retry (Vercel Cron). Authorised by CRON_SECRET so it can
+  // run unauthenticated on a schedule; it only re-sends invites that no mail
+  // provider has accepted yet, so triggering it is harmless.
+  app.get('/api/v1/cron/invite-drain', async (req, res, next) => {
+    try {
+      const secret = env.CRON_SECRET;
+      const header = req.headers.authorization ?? '';
+      if (secret && header !== `Bearer ${secret}`) {
+        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid cron secret' } });
+        return;
+      }
+      const originUrl = `${req.protocol}://${req.get('host')}`;
+      const result = await drainUndeliveredInvites(100, originUrl);
+      res.json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.use('/api/v1/auth', authLimiter, authRoutes);
   app.use('/api/v1/public', publicLimiter, publicRoutes);
   app.use('/api/v1/users', userRoutes);

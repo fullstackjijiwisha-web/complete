@@ -637,6 +637,9 @@
     const stat = (num, lbl) =>
       '<div class="fbadmin-tile"><div class="num">' + num + '</div><div class="lbl">' + lbl + "</div></div>";
     const reasons = Object.entries(d.failureReasons || {});
+    // Everyone whose email no provider confirmed accepting = rejected + those
+    // invited before delivery tracking existed. They auto-retry nightly.
+    const undelivered = (d.emailFailed ?? 0) + (d.emailUnknown ?? 0);
     box.innerHTML =
       '<div class="mt-2" style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px;">' +
       '<h4 class="small" style="margin:0 0 8px; font-weight:700; color:var(--green-900)">📶 Invite delivery & progress</h4>' +
@@ -658,6 +661,12 @@
         ? '<p class="small" style="margin:0 0 8px; color:#dc2626">Failure reasons: ' +
           reasons.map(function (r) { return PC.esc(r[0]) + " × " + r[1]; }).join(" · ") + "</p>"
         : "") +
+      (undelivered > 0
+        ? '<p class="small muted" style="margin:0 0 8px">' + undelivered +
+          " employee" + (undelivered === 1 ? "" : "s") + " have no confirmed email delivery yet. " +
+          "They are retried <strong>automatically every night</strong> until each one is accepted — " +
+          "you can also send now with the button below.</p>"
+        : "") +
       (d.pendingExpired > 0
         ? '<p class="small muted" style="margin:0 0 8px">The ' + d.pendingExpired +
           ' employee' + (d.pendingExpired === 1 ? "" : "s") + ' under “link expired” see ' +
@@ -665,7 +674,7 @@
         : "") +
       '<div class="flex" style="gap:8px; flex-wrap:wrap; align-items:center">' +
       '<button class="btn btn-sm btn-orange adm-resend" data-org-id="' + orgId + '" data-scope="failed"' +
-      ((d.emailFailed ?? 0) === 0 ? " disabled" : "") + ">↻ Resend failed emails (" + (d.emailFailed ?? 0) + ")</button>" +
+      (undelivered === 0 ? " disabled" : "") + ">↻ Resend undelivered (" + undelivered + ")</button>" +
       '<button class="btn btn-sm btn-ghost adm-resend" data-org-id="' + orgId + '" data-scope="expired"' +
       (d.pendingExpired === 0 ? " disabled" : "") + ">↻ Resend expired links (" + d.pendingExpired + ")</button>" +
       '<button class="btn btn-sm btn-ghost adm-resend" data-org-id="' + orgId + '" data-scope="all_pending"' +
@@ -684,7 +693,12 @@
       : scope === "failed"
         ? "the employees whose invite email the mail provider rejected"
         : "EVERY employee of this organisation who hasn't activated yet";
-    if (!confirm("Resend invite emails to " + what + "?\n\nEach gets an additional fresh link — links already in their inbox keep working until they expire. Only this organisation is affected. Safe to run again.")) return;
+    const ok = await PC.confirmModal(
+      "Resend invite emails",
+      "Send to <strong>" + what + "</strong>.<br><br>Each gets an additional fresh link — links already in their inbox keep working until they expire. Only this organisation is affected, and it is safe to run again.",
+      "Send invites",
+    );
+    if (!ok) return;
 
     const prog = document.getElementById("adm-resend-prog-" + orgId);
     const box = document.getElementById("invite-status-" + orgId);
