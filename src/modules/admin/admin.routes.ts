@@ -67,7 +67,7 @@ adminRoutes.post(
   '/orgs/:id/resend-invites',
   validate(
     z.object({
-      scope: z.enum(['expired', 'all_pending']),
+      scope: z.enum(['expired', 'failed', 'all_pending']),
       skip: z.coerce.number().int().min(0).optional(),
     }),
   ),

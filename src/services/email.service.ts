@@ -78,9 +78,19 @@ async function sendViaBrevo(message: EmailMessage): Promise<void> {
   }
 }
 
-// Best-effort: a delivery failure is logged, never thrown into the caller (an
-// email problem must not fail an enrolment, certificate, etc.).
-export async function sendEmail(message: EmailMessage): Promise<void> {
+// Outcome of an attempted send. 'logged' means no provider is configured
+// (local dev) — the message was written to the log instead of delivered.
+export interface EmailResult {
+  delivered: boolean;
+  mode: 'sent' | 'logged' | 'failed';
+  error?: string;
+}
+
+// Best-effort: a delivery failure is logged and REPORTED to the caller, never
+// thrown (an email problem must not fail an enrolment, certificate, etc.).
+// Callers that care — invites especially — record the outcome so operators can
+// see who actually received their email instead of guessing.
+export async function sendEmail(message: EmailMessage): Promise<EmailResult> {
   if (!brevoApiKey && !transporter) {
     logger.info('Email (log mode — not sent)', {
       to: message.to,
@@ -89,7 +99,7 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
       body: message.text,
       attachmentsCount: message.attachments?.length ?? 0,
     });
-    return;
+    return { delivered: false, mode: 'logged' };
   }
   try {
     if (brevoApiKey) {
@@ -97,7 +107,10 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
     } else if (transporter) {
       await transporter.sendMail({ from: env.EMAIL_FROM, ...message });
     }
+    return { delivered: true, mode: 'sent' };
   } catch (err) {
-    logger.error('Email send failed', { to: message.to, message: (err as Error).message });
+    const detail = (err as Error).message;
+    logger.error('Email send failed', { to: message.to, message: detail });
+    return { delivered: false, mode: 'failed', error: detail.slice(0, 300) };
   }
 }

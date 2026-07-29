@@ -142,7 +142,7 @@ export const importEmployees: RequestHandler = async (req, res) => {
 // in). Works in small batches so a serverless request can never time out
 // mid-run: the dashboard calls this in a loop, passing `skip` as a cursor
 // over the employeeCode-ordered pending list, until `remaining` hits 0.
-const RESEND_BATCH_MAX = 25;
+const RESEND_BATCH_MAX = 10;
 const RESEND_CONCURRENCY = 5;
 
 export const resendPendingInvites: RequestHandler = async (req, res) => {
@@ -165,19 +165,26 @@ export const resendPendingInvites: RequestHandler = async (req, res) => {
     .select('email whatsapp employeeCode');
 
   const originUrl = req.protocol + '://' + req.get('host');
-  let resent = 0;
+  // Delivery-based counting: an email the provider rejected (daily quota, bad
+  // address) must not be reported to HR as "resent".
+  let delivered = 0;
+  let failed = 0;
   for (let i = 0; i < batch.length; i += RESEND_CONCURRENCY) {
     const results = await Promise.allSettled(
       batch
         .slice(i, i + RESEND_CONCURRENCY)
         .map((e) => issueInvite(e.id, orgId, e.email, org.name, e.whatsapp, originUrl)),
     );
-    resent += results.filter((r) => r.status === 'fulfilled').length;
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.delivered) delivered += 1;
+      else failed += 1;
+    }
   }
 
-  if (resent > 0) {
+  if (batch.length > 0) {
     await logAudit('employee.invites_bulk_resent', 'Organisation', orgId, authUser(req).id, {
-      resent,
+      delivered,
+      failed,
       skip,
       totalPending,
     });
@@ -187,7 +194,8 @@ export const resendPendingInvites: RequestHandler = async (req, res) => {
     data: {
       totalPending,
       batchCount: batch.length,
-      resentCount: resent,
+      resentCount: delivered,
+      failedCount: failed,
       remaining: Math.max(0, totalPending - skip - batch.length),
     },
   });

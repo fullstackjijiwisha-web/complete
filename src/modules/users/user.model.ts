@@ -16,6 +16,13 @@ export interface IUser {
   failedLogins: number;
   lockedUntil?: Date;
   status: UserStatus;
+  // Invite delivery trail — without this a failed send (e.g. the email
+  // provider's daily quota rejecting the request) is invisible, and an
+  // employee who never got their email looks identical to one who ignored it.
+  inviteSentAt?: Date;
+  inviteDelivery?: 'sent' | 'failed' | 'logged';
+  inviteError?: string;
+  inviteSendCount?: number;
   consent?: { acceptedAt: Date; version: string };
   // Set by HR approve-reattempt once MAX_ATTEMPTS_PER_CYCLE is exhausted;
   // consumed (cleared) when the next attempt starts.
@@ -45,6 +52,10 @@ const userSchema = new Schema<IUser>(
     failedLogins: { type: Number, default: 0 },
     lockedUntil: { type: Date },
     status: { type: String, enum: ['invited', 'active'], default: 'invited' },
+    inviteSentAt: { type: Date },
+    inviteDelivery: { type: String, enum: ['sent', 'failed', 'logged'] },
+    inviteError: { type: String },
+    inviteSendCount: { type: Number, default: 0 },
     consent: { acceptedAt: Date, version: String },
     reattemptApprovedAt: { type: Date },
     retrainingFlagged: { type: Boolean, default: false },

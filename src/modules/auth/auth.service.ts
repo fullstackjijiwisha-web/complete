@@ -178,7 +178,10 @@ export async function acceptInvite(input: {
   user.status = 'active';
   user.consent = { acceptedAt: new Date(), version: CONSENT_VERSION };
   await user.save();
-  await Invite.deleteOne({ _id: invite._id });
+  // Every outstanding link for this employee dies on activation — resends can
+  // leave several valid at once (so any email they hold works), and a leftover
+  // one must never be usable to set a new password on a live account.
+  await Invite.deleteMany({ userId: invite.userId });
   await logAudit('user.invite_accepted', 'User', user.id, user.id, {
     consentVersion: CONSENT_VERSION,
   });

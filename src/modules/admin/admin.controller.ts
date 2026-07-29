@@ -185,6 +185,20 @@ export const orgInviteStatus: RequestHandler = async (req, res) => {
     Certificate.countDocuments({ orgId: org._id, cycle, revoked: false }),
   ]);
 
+  // Did the email actually leave the building? Recorded per employee since the
+  // delivery-trail change; employees invited before it are 'unknown'.
+  const delivery = await User.find({
+    _id: { $in: pending.map((p) => p._id) },
+  }).select('email inviteDelivery inviteError inviteSentAt');
+  const emailFailedDocs = delivery.filter((d) => d.inviteDelivery === 'failed');
+  const emailSent = delivery.filter((d) => d.inviteDelivery === 'sent').length;
+  const emailUnknown = delivery.filter((d) => !d.inviteDelivery).length;
+  const failureReasons: Record<string, number> = {};
+  for (const d of emailFailedDocs) {
+    const key = (d.inviteError ?? 'unknown error').slice(0, 120);
+    failureReasons[key] = (failureReasons[key] ?? 0) + 1;
+  }
+
   res.json({
     success: true,
     data: {
@@ -197,22 +211,32 @@ export const orgInviteStatus: RequestHandler = async (req, res) => {
       pendingLive: pending.length - pendingExpired.length,
       pendingExpired: pendingExpired.length,
       pendingExpiredEmails: pendingExpired.slice(0, 500).map((p) => p.email),
+      emailSent,
+      emailFailed: emailFailedDocs.length,
+      emailUnknown,
+      failureReasons,
+      emailFailedAddresses: emailFailedDocs.slice(0, 500).map((d) => d.email),
     },
   });
 };
 
-// Super admin: resend invites for ONE organisation, batched (25/request) so a
-// serverless request can never time out mid-run. scope 'expired' targets only
-// employees whose link is dead — that set shrinks as we resend, so each call
-// simply takes the first 25 still-expired (no cursor). scope 'all_pending'
-// walks the stable employeeCode-ordered pending list with a `skip` cursor.
-const ADMIN_RESEND_BATCH = 25;
+// Super admin: resend invites for ONE organisation, in small batches so a
+// single request always finishes well inside the serverless time limit (a
+// 25-email batch could exceed it when the mail provider was slow, which
+// aborted the whole run and looked like "the button doesn't work").
+//   scope 'expired' — employees with no live link; the set shrinks as we
+//     resend, so each call takes the first N still-expired (no cursor).
+//   scope 'failed'  — employees whose last invite email was rejected by the
+//     provider (quota, bad address). Also shrinks as sends succeed.
+//   scope 'all_pending' — everyone not yet activated, walked with a `skip`
+//     cursor over the stable employeeCode order.
+const ADMIN_RESEND_BATCH = 10;
 const ADMIN_RESEND_CONCURRENCY = 5;
 
 export const adminResendOrgInvites: RequestHandler = async (req, res) => {
   const org = await Organisation.findById(req.params.id);
   if (!org) throw ApiError.notFound();
-  const scope = req.body.scope as 'expired' | 'all_pending';
+  const scope = req.body.scope as 'expired' | 'failed' | 'all_pending';
   const skip = Math.max(0, Number(req.body?.skip) || 0);
 
   const pendingFilter = {
@@ -235,6 +259,15 @@ export const adminResendOrgInvites: RequestHandler = async (req, res) => {
       .select('email whatsapp');
     batch = docs.map((d) => ({ id: d.id, email: d.email, whatsapp: d.whatsapp }));
     remaining = Math.max(0, totalTargets - skip - batch.length);
+  } else if (scope === 'failed') {
+    const failedFilter = { ...pendingFilter, inviteDelivery: 'failed' as const };
+    totalTargets = await User.countDocuments(failedFilter);
+    const docs = await User.find(failedFilter)
+      .sort({ employeeCode: 1 })
+      .limit(ADMIN_RESEND_BATCH)
+      .select('email whatsapp');
+    batch = docs.map((d) => ({ id: d.id, email: d.email, whatsapp: d.whatsapp }));
+    remaining = Math.max(0, totalTargets - batch.length);
   } else {
     const pending = await User.find(pendingFilter).sort({ employeeCode: 1 }).select('email whatsapp');
     const invites = await Invite.find({ userId: { $in: pending.map((p) => p._id) } }).select(
@@ -253,26 +286,51 @@ export const adminResendOrgInvites: RequestHandler = async (req, res) => {
   }
 
   const originUrl = req.protocol + '://' + req.get('host');
-  let resent = 0;
+  // Counts what the mail provider ACCEPTED, not merely what we attempted —
+  // the number an operator needs when a daily quota starts rejecting sends.
+  let delivered = 0;
+  let failed = 0;
+  const failureSamples: string[] = [];
   for (let i = 0; i < batch.length; i += ADMIN_RESEND_CONCURRENCY) {
     const results = await Promise.allSettled(
       batch
         .slice(i, i + ADMIN_RESEND_CONCURRENCY)
         .map((e) => issueInvite(e.id, org.id, e.email, org.name, e.whatsapp, originUrl)),
     );
-    resent += results.filter((r) => r.status === 'fulfilled').length;
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.delivered) {
+        delivered += 1;
+      } else {
+        failed += 1;
+        const reason =
+          r.status === 'fulfilled'
+            ? r.value.error ?? (r.value.mode === 'logged' ? 'email provider not configured' : 'unknown')
+            : (r.reason as Error).message;
+        if (failureSamples.length < 3 && reason) failureSamples.push(reason.slice(0, 160));
+      }
+    }
   }
 
-  if (resent > 0) {
+  if (batch.length > 0) {
     await logAudit('admin.org_invites_resent', 'Organisation', org.id, authUser(req).id, {
       scope,
-      resent,
+      delivered,
+      failed,
       totalTargets,
     });
   }
   res.json({
     success: true,
-    data: { totalTargets, batchCount: batch.length, resentCount: resent, remaining },
+    data: {
+      totalTargets,
+      batchCount: batch.length,
+      // resentCount stays delivery-based so the UI never claims success for
+      // emails the provider rejected.
+      resentCount: delivered,
+      failedCount: failed,
+      failureSamples,
+      remaining,
+    },
   });
 };
 
@@ -286,8 +344,13 @@ export const exportOrgEmployees: RequestHandler = async (req, res) => {
   const cycle = currentCycle();
   const employees = await User.find({ orgId: org._id, role: 'employee', isDeleted: false })
     .sort({ employeeCode: 1 })
-    .select('name email whatsapp employeeCode status');
+    .select('name email whatsapp employeeCode status inviteSentAt inviteDelivery inviteError inviteSendCount');
   const userIds = employees.map((e) => e._id);
+  const liveInvites = await Invite.find({
+    userId: { $in: userIds },
+    expiresAt: { $gt: new Date() },
+  }).select('userId');
+  const hasLiveLink = new Set(liveInvites.map((i) => i.userId.toString()));
   const [certs, scoredBest] = await Promise.all([
     Certificate.find({ userId: { $in: userIds }, cycle, revoked: false }).select('userId certId score'),
     AssessmentAttempt.aggregate<{ _id: Types.ObjectId; bestScore: number; attempts: number }>([
@@ -299,7 +362,9 @@ export const exportOrgEmployees: RequestHandler = async (req, res) => {
   const bestByUser = new Map(scoredBest.map((r) => [r._id.toString(), r]));
 
   const quote = (v: string) => `"${v.replace(/"/g, '""')}"`;
-  let csv = 'employeeCode,name,email,whatsapp,inviteStatus,attemptsThisCycle,bestScore,certified,certificateId\n';
+  let csv =
+    'employeeCode,name,email,whatsapp,inviteStatus,emailDelivery,emailSentAt,emailError,' +
+    'inviteLinkLive,timesInvited,attemptsThisCycle,bestScore,certified,certificateId\n';
   for (const e of employees) {
     const id = e._id.toString();
     const cert = certByUser.get(id);
@@ -311,6 +376,11 @@ export const exportOrgEmployees: RequestHandler = async (req, res) => {
         e.email,
         e.whatsapp ?? '',
         e.status ?? '',
+        e.inviteDelivery ?? 'unknown',
+        e.inviteSentAt ? e.inviteSentAt.toISOString() : '',
+        quote(e.inviteError ?? ''),
+        e.status === 'active' ? 'n/a' : hasLiveLink.has(id) ? 'yes' : 'no',
+        String(e.inviteSendCount ?? 0),
         String(best?.attempts ?? 0),
         best?.bestScore != null ? String(best.bestScore) : '',
         cert ? 'yes' : 'no',

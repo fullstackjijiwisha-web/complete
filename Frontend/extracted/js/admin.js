@@ -636,6 +636,7 @@
     }
     const stat = (num, lbl) =>
       '<div class="fbadmin-tile"><div class="num">' + num + '</div><div class="lbl">' + lbl + "</div></div>";
+    const reasons = Object.entries(d.failureReasons || {});
     box.innerHTML =
       '<div class="mt-2" style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px;">' +
       '<h4 class="small" style="margin:0 0 8px; font-weight:700; color:var(--green-900)">📶 Invite delivery & progress</h4>' +
@@ -647,13 +648,25 @@
       stat(d.pendingLive, "Pending — link OK") +
       stat(d.pendingExpired, "Pending — link expired") +
       "</div>" +
+      '<h4 class="small" style="margin:10px 0 6px; font-weight:700; color:var(--green-900)">✉ Email delivery (pending employees)</h4>' +
+      '<div class="fbadmin-stats" style="margin-bottom:10px">' +
+      stat(d.emailSent ?? 0, "Accepted by mail provider") +
+      stat(d.emailFailed ?? 0, "Rejected / failed") +
+      stat(d.emailUnknown ?? 0, "No record (older invite)") +
+      "</div>" +
+      (reasons.length
+        ? '<p class="small" style="margin:0 0 8px; color:#dc2626">Failure reasons: ' +
+          reasons.map(function (r) { return PC.esc(r[0]) + " × " + r[1]; }).join(" · ") + "</p>"
+        : "") +
       (d.pendingExpired > 0
         ? '<p class="small muted" style="margin:0 0 8px">The ' + d.pendingExpired +
           ' employee' + (d.pendingExpired === 1 ? "" : "s") + ' under “link expired” see ' +
           '<em>“Invite link is invalid or has expired”</em> — resend below to give them working links.</p>'
         : "") +
       '<div class="flex" style="gap:8px; flex-wrap:wrap; align-items:center">' +
-      '<button class="btn btn-sm btn-orange adm-resend" data-org-id="' + orgId + '" data-scope="expired"' +
+      '<button class="btn btn-sm btn-orange adm-resend" data-org-id="' + orgId + '" data-scope="failed"' +
+      ((d.emailFailed ?? 0) === 0 ? " disabled" : "") + ">↻ Resend failed emails (" + (d.emailFailed ?? 0) + ")</button>" +
+      '<button class="btn btn-sm btn-ghost adm-resend" data-org-id="' + orgId + '" data-scope="expired"' +
       (d.pendingExpired === 0 ? " disabled" : "") + ">↻ Resend expired links (" + d.pendingExpired + ")</button>" +
       '<button class="btn btn-sm btn-ghost adm-resend" data-org-id="' + orgId + '" data-scope="all_pending"' +
       (d.pendingTotal === 0 ? " disabled" : "") + ">↻ Resend ALL pending (" + d.pendingTotal + ")</button>" +
@@ -667,31 +680,65 @@
 
   async function adminResendInvites(orgId, scope) {
     const what = scope === "expired"
-      ? "only the employees whose invite link has expired"
-      : "EVERY employee of this organisation who hasn't activated yet";
-    if (!confirm("Resend invite emails to " + what + "?\n\nEach gets a fresh link and any older link in their inbox stops working. Only this organisation is affected. Safe to run again if some sends are dropped.")) return;
+      ? "the employees whose invite link has expired"
+      : scope === "failed"
+        ? "the employees whose invite email the mail provider rejected"
+        : "EVERY employee of this organisation who hasn't activated yet";
+    if (!confirm("Resend invite emails to " + what + "?\n\nEach gets an additional fresh link — links already in their inbox keep working until they expire. Only this organisation is affected. Safe to run again.")) return;
 
     const prog = document.getElementById("adm-resend-prog-" + orgId);
     const box = document.getElementById("invite-status-" + orgId);
     box.querySelectorAll(".adm-resend").forEach(b => { b.disabled = true; });
     let skip = 0;
-    let resent = 0;
+    let delivered = 0;
+    let failed = 0;
+    let samples = [];
+    let stoppedBy = null;
     try {
       for (;;) {
-        const r = await PC.api("/admin/orgs/" + orgId + "/resend-invites", {
-          method: "POST",
-          body: scope === "all_pending" ? { scope: scope, skip: skip } : { scope: scope },
-        });
-        resent += r.resentCount;
+        // A batch can fail transiently (cold start, slow mail provider). Retry
+        // it a couple of times before giving up so one blip doesn't abort a
+        // 300-employee run half-way through.
+        let r = null;
+        let lastErr = null;
+        for (let attempt = 0; attempt < 3 && !r; attempt++) {
+          try {
+            r = await PC.api("/admin/orgs/" + orgId + "/resend-invites", {
+              method: "POST",
+              body: scope === "all_pending" ? { scope: scope, skip: skip } : { scope: scope },
+            });
+          } catch (ex) {
+            lastErr = ex;
+            await new Promise(function (res) { setTimeout(res, 1200 * (attempt + 1)); });
+          }
+        }
+        if (!r) throw lastErr;
+
+        delivered += r.resentCount;
+        failed += r.failedCount || 0;
+        if (r.failureSamples && r.failureSamples.length && samples.length < 3) {
+          samples = samples.concat(r.failureSamples).slice(0, 3);
+        }
         skip += r.batchCount;
-        if (prog) prog.textContent = "Resent " + resent + " of " + r.totalTargets + "…";
+        if (prog) prog.textContent = "Sent " + delivered + (failed ? " · " + failed + " failed" : "") +
+          " of " + r.totalTargets + "…";
         if (r.remaining <= 0 || r.batchCount === 0) break;
+        // Every send in a 'failed'/'expired' run that still fails keeps the
+        // target in the same bucket, so the set would never drain — stop once
+        // a full batch produced no successful delivery.
+        if (scope !== "all_pending" && r.resentCount === 0) { stoppedBy = "no_progress"; break; }
       }
-      PC.alertModal("Invites resent", resent + " invite email" + (resent === 1 ? "" : "s") +
-        " resent with fresh links for this organisation. Employees who already activated were not touched.");
+      if (prog) prog.textContent = "";
+      PC.alertModal("Resend finished",
+        "<strong>" + delivered + "</strong> invite email" + (delivered === 1 ? "" : "s") +
+        " accepted by the mail provider." +
+        (failed ? "<br><strong style=\"color:#dc2626\">" + failed + " rejected</strong>" +
+          (samples.length ? " — " + PC.esc(samples[0]) : "") +
+          "<br><span class=\"small muted\">Rejections are usually the mail plan's daily quota. Re-run later; the panel tracks who still needs an email.</span>" : "") +
+        (stoppedBy === "no_progress" ? "<br><span class=\"small muted\">Stopped early because no email in the last batch was accepted.</span>" : ""));
     } catch (e) {
       PC.alertModal("Resend stopped", PC.esc(e.message) +
-        (resent ? "<br>" + resent + " invites were already resent — running it again continues safely." : ""));
+        (delivered ? "<br>" + delivered + " emails were already sent — running it again continues safely." : ""));
     }
     loadInviteStatus(orgId);
   }

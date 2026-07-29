@@ -6,6 +6,7 @@ import { ApiError } from '../../utils/ApiError';
 import { employeeCode, newInviteToken } from '../../utils/ids';
 import { sha256Hex } from '../../utils/tokenCompare';
 import { sendEmail } from '../../services/email.service';
+import type { EmailResult } from '../../services/email.service';
 import { sendWhatsApp } from '../../services/whatsapp.service';
 import { env } from '../../config/env';
 
@@ -42,6 +43,13 @@ export async function createEmployee(
   return { userId: user.id, employeeCode: code };
 }
 
+// Issues a NEW invite link and emails it. Previously-issued links for the
+// same employee are deliberately left valid until their own 7-day expiry:
+// deleting them made every earlier email dead the moment a resend ran, so an
+// employee opening the first invite they received — the common case — hit
+// "Invite link is invalid or has expired" on their very first attempt. All
+// outstanding links are cleared the moment the account is activated
+// (auth.service acceptInvite), so none can later reset an active password.
 export async function issueInvite(
   userId: string,
   orgId: string,
@@ -49,9 +57,8 @@ export async function issueInvite(
   orgName: string,
   whatsapp?: string,
   originUrl?: string,
-): Promise<void> {
+): Promise<EmailResult> {
   const rawToken = newInviteToken();
-  await Invite.deleteMany({ userId: new Types.ObjectId(userId) });
   await Invite.create({
     email,
     orgId: new Types.ObjectId(orgId),
@@ -62,7 +69,7 @@ export async function issueInvite(
 
   const baseUrl = originUrl || env.CLIENT_URL;
   const link = `${baseUrl}/invite/accept?token=${rawToken}`;
-  await sendEmail({
+  const result = await sendEmail({
     to: email,
     subject: `You're invited to the POSH assessment — ${orgName}`,
     text:
@@ -70,6 +77,20 @@ export async function issueInvite(
       `Set your password and get started: ${link}\n\n` +
       `This link expires in ${INVITE_TTL_DAYS} days.`,
   });
+
+  // Delivery trail: makes "the email never arrived" answerable from the
+  // admin panel instead of guesswork.
+  await User.updateOne(
+    { _id: new Types.ObjectId(userId) },
+    {
+      $set: {
+        inviteSentAt: new Date(),
+        inviteDelivery: result.mode,
+        ...(result.error ? { inviteError: result.error } : { inviteError: undefined }),
+      },
+      $inc: { inviteSendCount: 1 },
+    },
+  );
 
   if (whatsapp) {
     await sendWhatsApp({
@@ -79,4 +100,5 @@ export async function issueInvite(
         `Set your password and begin here: ${link} (link expires in ${INVITE_TTL_DAYS} days).`,
     });
   }
+  return result;
 }

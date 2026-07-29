@@ -392,25 +392,42 @@
     )) return;
     btn.disabled = true;
     let skip = 0;
-    let resent = 0;
+    let delivered = 0;
+    let failed = 0;
     try {
       for (;;) {
-        const r = await PC.api("/orgs/me/employees/resend-pending-invites", {
-          method: "POST",
-          body: { skip: skip },
-        });
-        resent += r.resentCount;
+        // Retry a transient batch failure (cold start / slow mail provider)
+        // rather than aborting a long run half-way.
+        let r = null;
+        let lastErr = null;
+        for (let attempt = 0; attempt < 3 && !r; attempt++) {
+          try {
+            r = await PC.api("/orgs/me/employees/resend-pending-invites", {
+              method: "POST",
+              body: { skip: skip },
+            });
+          } catch (ex) {
+            lastErr = ex;
+            await new Promise(function (res) { setTimeout(res, 1200 * (attempt + 1)); });
+          }
+        }
+        if (!r) throw lastErr;
+
+        delivered += r.resentCount;
+        failed += r.failedCount || 0;
         skip += r.batchCount;
-        if (prog) prog.textContent = "Resent " + resent + " of " + r.totalPending + "…";
+        if (prog) prog.textContent = "Sent " + delivered + (failed ? " · " + failed + " failed" : "") +
+          " of " + r.totalPending + "…";
         if (r.remaining <= 0 || r.batchCount === 0) break;
       }
       if (prog) prog.textContent = "";
-      PC.alertModal("Invites resent",
-        resent + " invite email" + (resent === 1 ? "" : "s") + " resent with fresh links. " +
-        "Employees who already activated were not touched.");
+      PC.alertModal("Resend finished",
+        delivered + " invite email" + (delivered === 1 ? "" : "s") + " accepted by the mail provider. " +
+        "Employees who already activated were not touched." +
+        (failed ? "<br><strong style=\"color:#dc2626\">" + failed + " rejected</strong> — usually the mail plan's daily limit. Try again later; nobody is lost." : ""));
     } catch (e) {
       PC.alertModal("Resend stopped", PC.esc(e.message) +
-        (resent ? "<br>" + resent + " invites had already been resent before the error — running it again continues safely." : ""));
+        (delivered ? "<br>" + delivered + " invites had already been sent before the error — running it again continues safely." : ""));
     }
     btn.disabled = false;
     load();
