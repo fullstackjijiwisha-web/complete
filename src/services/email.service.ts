@@ -11,6 +11,8 @@ import { logger } from '../utils/logger';
 // With none configured, messages are logged instead of sent (local dev).
 interface Provider {
   name: string;
+  kind: 'brevo' | 'smtp';
+  apiKey?: string; // brevo only — used by the health check, never exposed
   send: (message: EmailMessage) => Promise<void>;
 }
 
@@ -78,6 +80,8 @@ function buildProviders(): Provider[] {
     seen.add(key);
     list.push({
       name: `brevo${i === 0 ? '' : `#${i + 1}`}`,
+      kind: 'brevo',
+      apiKey: key,
       send: (message) => sendViaBrevo(key, message),
     });
   });
@@ -91,6 +95,7 @@ function buildProviders(): Provider[] {
     });
     list.push({
       name: 'smtp',
+      kind: 'smtp',
       send: async (message) => {
         await transporter.sendMail({ from: env.EMAIL_FROM, ...message });
       },
@@ -120,6 +125,165 @@ if (providers.length) {
 
 export function emailProviderNames(): string[] {
   return providers.map((p) => p.name);
+}
+
+// ── Health check ────────────────────────────────────────────────────────
+// Answers "why is no email going out?" from inside the product: asks each
+// configured Brevo account for its plan/credits and whether the sender
+// address is verified. API keys are used but never returned.
+export interface ProviderHealth {
+  name: string;
+  kind: 'brevo' | 'smtp';
+  ok: boolean;
+  status?: number;
+  error?: string;
+  hint?: string;
+  accountEmail?: string;
+  company?: string;
+  plans?: Array<{ type: string; creditsType?: string; credits?: number }>;
+  creditsRemaining?: number | null;
+}
+
+export interface EmailHealth {
+  configured: boolean;
+  from: string;
+  providerCount: number;
+  providers: ProviderHealth[];
+  senders?: Array<{ email: string; active: boolean }>;
+  fromVerified?: boolean | null;
+  totalCreditsRemaining?: number | null;
+  summary: 'ok' | 'degraded' | 'down' | 'not_configured';
+}
+
+interface BrevoPlan {
+  type?: string;
+  creditsType?: string;
+  credits?: number;
+}
+
+function hintFor(status: number | undefined, body: string): string | undefined {
+  if (status === 401) return 'API key is invalid, revoked or regenerated — create a new key in Brevo and update BREVO_API_KEY.';
+  if (status === 402) return 'Brevo reports no credits / payment required — top up or upgrade the plan.';
+  if (status === 429) return "Rate or daily sending limit reached — it resets on Brevo's schedule; add another account for more headroom.";
+  if (/block|suspend|review/i.test(body)) return 'Brevo appears to have blocked or paused this account — contact Brevo support to lift it.';
+  return undefined;
+}
+
+async function brevoGet(key: string, path: string): Promise<{ status: number; body: string }> {
+  const res = await fetch(`https://api.brevo.com/v3${path}`, {
+    headers: { 'api-key': key, Accept: 'application/json' },
+    signal: AbortSignal.timeout(8000),
+  });
+  return { status: res.status, body: await res.text().catch(() => '') };
+}
+
+export async function checkEmailHealth(): Promise<EmailHealth> {
+  if (!providers.length) {
+    return {
+      configured: false,
+      from: env.EMAIL_FROM,
+      providerCount: 0,
+      providers: [],
+      summary: 'not_configured',
+    };
+  }
+
+  const results: ProviderHealth[] = [];
+  let sendersList: Array<{ email: string; active: boolean }> | undefined;
+
+  for (const p of providers) {
+    if (p.kind !== 'brevo' || !p.apiKey) {
+      // SMTP has no account API — presence is all we can report without
+      // sending a probe message.
+      results.push({ name: p.name, kind: 'smtp', ok: true, hint: 'Configured as a fallback (status is only proven by an actual send).' });
+      continue;
+    }
+    try {
+      const { status, body } = await brevoGet(p.apiKey, '/account');
+      if (status !== 200) {
+        results.push({
+          name: p.name,
+          kind: 'brevo',
+          ok: false,
+          status,
+          error: body.slice(0, 200),
+          ...(hintFor(status, body) ? { hint: hintFor(status, body)! } : {}),
+        });
+        continue;
+      }
+      const json = JSON.parse(body) as {
+        email?: string;
+        companyName?: string;
+        plan?: BrevoPlan[];
+      };
+      const plans = (json.plan ?? []).map((pl) => ({
+        type: pl.type ?? 'unknown',
+        ...(pl.creditsType ? { creditsType: pl.creditsType } : {}),
+        ...(typeof pl.credits === 'number' ? { credits: pl.credits } : {}),
+      }));
+      // Email-sending allowance: Brevo reports it as sendLimit (free plans)
+      // or a credit balance on paid ones. SMS plans are ignored.
+      const emailPlans = plans.filter((pl) => (pl.creditsType ?? '').toLowerCase() !== 'sms');
+      const credits = emailPlans.reduce<number | null>(
+        (sum, pl) => (typeof pl.credits === 'number' ? (sum ?? 0) + pl.credits : sum),
+        null,
+      );
+      results.push({
+        name: p.name,
+        kind: 'brevo',
+        ok: true,
+        ...(json.email ? { accountEmail: json.email } : {}),
+        ...(json.companyName ? { company: json.companyName } : {}),
+        plans,
+        creditsRemaining: credits,
+      });
+
+      if (!sendersList) {
+        const s = await brevoGet(p.apiKey, '/senders');
+        if (s.status === 200) {
+          const parsed = JSON.parse(s.body) as { senders?: Array<{ email?: string; active?: boolean }> };
+          sendersList = (parsed.senders ?? []).map((x) => ({
+            email: x.email ?? '',
+            active: Boolean(x.active),
+          }));
+        }
+      }
+    } catch (err) {
+      results.push({
+        name: p.name,
+        kind: 'brevo',
+        ok: false,
+        error: (err as Error).message.slice(0, 200),
+        hint: 'Could not reach the Brevo API (network/timeout).',
+      });
+    }
+  }
+
+  const working = results.filter((r) => r.ok);
+  const totalCredits = results.reduce<number | null>(
+    (sum, r) => (typeof r.creditsRemaining === 'number' ? (sum ?? 0) + r.creditsRemaining : sum),
+    null,
+  );
+  const fromVerified = sendersList
+    ? sendersList.some((s) => s.email.toLowerCase() === env.EMAIL_FROM.toLowerCase() && s.active)
+    : null;
+
+  let summary: EmailHealth['summary'] = 'ok';
+  if (!working.length) summary = 'down';
+  else if (working.length < results.length || fromVerified === false || totalCredits === 0) {
+    summary = 'degraded';
+  }
+
+  return {
+    configured: true,
+    from: env.EMAIL_FROM,
+    providerCount: providers.length,
+    providers: results,
+    ...(sendersList ? { senders: sendersList } : {}),
+    fromVerified,
+    totalCreditsRemaining: totalCredits,
+    summary,
+  };
 }
 
 // Best-effort: a delivery failure is logged and REPORTED to the caller, never

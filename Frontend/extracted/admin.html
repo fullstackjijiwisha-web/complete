@@ -45,8 +45,10 @@
     <div id="admin-main-view" class="admin-grid hidden">
       <div class="admin-sidebar">
         <button class="admin-tab-btn active" data-tab="questions">📚 Question Bank</button>
+        <button class="admin-tab-btn" data-tab="tests">📊 Tests Taken</button>
         <button class="admin-tab-btn" data-tab="orgs">🏢 Organisations</button>
         <button class="admin-tab-btn" data-tab="feedback">💬 Feedbacks</button>
+        <button class="admin-tab-btn" data-tab="email">✉ Email health</button>
       </div>
 
       <div class="admin-content">
@@ -116,6 +118,37 @@
           </p>
           <div id="feedback-container">
             <p class="small muted">Loading feedback…</p>
+          </div>
+        </div>
+
+        <!-- Tab: Tests taken -->
+        <div id="tab-tests" class="card hidden">
+          <div class="card-header-flex">
+            <h2 class="h-md" style="margin:0">Assessments Taken</h2>
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-tests">↻ Refresh</button>
+          </div>
+          <p class="small muted" style="margin:0 0 14px">
+            Every completed assessment across all organisations. A test counts once it is
+            scored — submitted by the employee or auto-submitted when the timer expired.
+          </p>
+          <div id="tests-container">
+            <p class="small muted">Loading…</p>
+          </div>
+        </div>
+
+        <!-- Tab: Email health -->
+        <div id="tab-email" class="card hidden">
+          <div class="card-header-flex">
+            <h2 class="h-md" style="margin:0">Email delivery health</h2>
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-email">↻ Re-check</button>
+          </div>
+          <p class="small muted" style="margin:0 0 14px">
+            Asks each configured mail account directly: plan, sending allowance left,
+            sender verification, and whether the account is blocked. Use this whenever
+            invites stop arriving.
+          </p>
+          <div id="email-health-container">
+            <p class="small muted">Checking…</p>
           </div>
         </div>
       </div>

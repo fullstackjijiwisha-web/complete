@@ -7,6 +7,7 @@ import { previewOrganisationWipe, wipeAllOrganisations } from '../organisations/
 import { User } from '../users/user.model';
 import { Invite } from '../auth/invite.model';
 import { issueInvite } from '../employees/employee.service';
+import { checkEmailHealth } from '../../services/email.service';
 import { Audit, AuditSlot } from '../audits/audit.model';
 import { AuditLog, logAudit } from '../auditlog/auditLog.model';
 import { PublicStats } from '../stats/publicStats.model';
@@ -156,6 +157,93 @@ export const listOrgs: RequestHandler = async (req, res) => {
     data: orgsWithAudits,
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   });
+};
+
+// Super admin: platform-wide assessment activity — how many tests have
+// actually been taken, by whom, and how they went. A "test taken" is a scored
+// attempt (submitted or auto-submitted at timeout); in-progress ones are
+// counted separately so the headline number never inflates.
+export const assessmentStats: RequestHandler = async (_req, res) => {
+  const cycle = currentCycle();
+  const now = Date.now();
+  const since = (days: number) => new Date(now - days * 86_400_000);
+
+  const [
+    totalTestsTaken,
+    inProgress,
+    testsThisCycle,
+    last7Days,
+    last30Days,
+    uniqueTakers,
+    certificatesIssued,
+    scoreAgg,
+    byOrgAgg,
+  ] = await Promise.all([
+    AssessmentAttempt.countDocuments({ status: 'scored' }),
+    AssessmentAttempt.countDocuments({ status: 'in_progress' }),
+    AssessmentAttempt.countDocuments({ status: 'scored', cycle }),
+    AssessmentAttempt.countDocuments({ status: 'scored', submittedAt: { $gte: since(7) } }),
+    AssessmentAttempt.countDocuments({ status: 'scored', submittedAt: { $gte: since(30) } }),
+    AssessmentAttempt.distinct('userId', { status: 'scored' }),
+    Certificate.countDocuments({ revoked: false }),
+    AssessmentAttempt.aggregate<{ _id: null; avg: number; passed: number }>([
+      { $match: { status: 'scored' } },
+      {
+        $group: {
+          _id: null,
+          avg: { $avg: '$score' },
+          passed: { $sum: { $cond: [{ $gte: ['$score', env.CERT_PASS_THRESHOLD] }, 1, 0] } },
+        },
+      },
+    ]),
+    AssessmentAttempt.aggregate<{ _id: Types.ObjectId; tests: number; avg: number; takers: string[] }>([
+      { $match: { status: 'scored' } },
+      { $group: { _id: '$orgId', tests: { $sum: 1 }, avg: { $avg: '$score' }, takers: { $addToSet: '$userId' } } },
+      { $sort: { tests: -1 } },
+      { $limit: 100 },
+    ]),
+  ]);
+
+  const orgs = await Organisation.find({ _id: { $in: byOrgAgg.map((r) => r._id) } }).select('name orgCode');
+  const orgById = new Map(orgs.map((o) => [o.id as string, o]));
+  const round1 = (n: number | undefined | null) => (n == null ? null : Math.round(n * 10) / 10);
+
+  res.json({
+    success: true,
+    data: {
+      totalTestsTaken,
+      inProgress,
+      testsThisCycle,
+      cycle,
+      last7Days,
+      last30Days,
+      uniqueEmployees: uniqueTakers.length,
+      certificatesIssued,
+      averageScore: round1(scoreAgg[0]?.avg),
+      passRate: totalTestsTaken ? round1(((scoreAgg[0]?.passed ?? 0) / totalTestsTaken) * 100) : null,
+      passThreshold: env.CERT_PASS_THRESHOLD,
+      byOrganisation: byOrgAgg.map((r) => ({
+        orgName: orgById.get(r._id.toString())?.name ?? '(deleted organisation)',
+        orgCode: orgById.get(r._id.toString())?.orgCode ?? '',
+        testsTaken: r.tests,
+        employees: r.takers.length,
+        averageScore: round1(r.avg),
+      })),
+    },
+  });
+};
+
+// Super admin: "why is no email going out?" — live status of every configured
+// mail account (plan, remaining allowance, sender verification, blocks).
+export const emailHealth: RequestHandler = async (_req, res) => {
+  const health = await checkEmailHealth();
+  const undelivered = await User.countDocuments({
+    role: 'employee',
+    isDeleted: false,
+    status: 'invited',
+    inviteDelivery: { $ne: 'sent' },
+  });
+  res.json({ success: true, data: { ...health, undeliveredInvites: undelivered } });
 };
 
 // Super admin: invite delivery & assessment progress for one organisation.

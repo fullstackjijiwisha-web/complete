@@ -103,6 +103,13 @@ adminRoutes.post(
 // (anonymous: org + cycle only, per the form's confidentiality promise).
 adminRoutes.get('/feedback', adminListFeedback);
 
+// Mail delivery health: plan, remaining allowance and sender verification for
+// every configured account — diagnoses "no emails are going out".
+adminRoutes.get('/email/health', controller.emailHealth);
+
+// Platform-wide assessment activity — total tests taken and how they went.
+adminRoutes.get('/assessment-stats', controller.assessmentStats);
+
 adminRoutes.get('/audit-log', controller.listAuditLog);
 adminRoutes.get('/config', controller.getConfig);
 

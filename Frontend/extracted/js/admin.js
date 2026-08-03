@@ -57,6 +57,8 @@
     });
 
     document.getElementById("btn-refresh-feedback").addEventListener("click", loadFeedback);
+    document.getElementById("btn-refresh-email").addEventListener("click", loadEmailHealth);
+    document.getElementById("btn-refresh-tests").addEventListener("click", loadTestStats);
 
     // Wire up the org danger-zone wipe modal
     document.getElementById("btn-wipe-orgs").addEventListener("click", openWipeOrgsModal);
@@ -95,12 +97,143 @@
 
   function switchTab(tab) {
     currentTab = tab;
-    ["questions", "orgs", "feedback"].forEach(t => {
+    ["questions", "tests", "orgs", "feedback", "email"].forEach(t => {
       document.getElementById("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "questions") loadQuestions();
+    if (tab === "tests") loadTestStats();
     if (tab === "orgs") loadOrgs();
     if (tab === "feedback") loadFeedback();
+    if (tab === "email") loadEmailHealth();
+  }
+
+  /* ---------------- Tests Taken Tab ---------------- */
+  async function loadTestStats() {
+    const box = document.getElementById("tests-container");
+    box.innerHTML = '<p class="small muted">Loading…</p>';
+    let d;
+    try {
+      d = await PC.api("/admin/assessment-stats");
+    } catch (e) {
+      box.innerHTML = '<p class="small" style="color:#dc2626">' + PC.esc(e.message) + "</p>";
+      return;
+    }
+
+    const n = function (v) { return (v === null || v === undefined) ? "—" : Number(v).toLocaleString("en-IN"); };
+    const tile = function (num, lbl) {
+      return '<div class="fbadmin-tile"><div class="num">' + num + '</div><div class="lbl">' + lbl + "</div></div>";
+    };
+
+    let html =
+      '<div style="background:var(--green-900); color:#fff; border-radius:10px; padding:22px; text-align:center; margin-bottom:16px">' +
+      '<div style="font-family:var(--serif); font-size:3.2rem; font-weight:700; line-height:1">' + n(d.totalTestsTaken) + "</div>" +
+      '<div style="font-size:0.9rem; letter-spacing:0.06em; opacity:0.85; margin-top:4px">TOTAL TESTS TAKEN</div>' +
+      '<div style="font-size:0.8rem; opacity:0.7; margin-top:6px">by ' + n(d.uniqueEmployees) +
+      " employee" + (d.uniqueEmployees === 1 ? "" : "s") + " across all organisations</div></div>";
+
+    html +=
+      '<div class="fbadmin-stats" style="margin-bottom:16px">' +
+      tile(n(d.testsThisCycle), "This cycle (" + PC.esc(d.cycle) + ")") +
+      tile(n(d.last30Days), "Last 30 days") +
+      tile(n(d.last7Days), "Last 7 days") +
+      tile(n(d.inProgress), "In progress right now") +
+      tile(n(d.certificatesIssued), "Certificates issued") +
+      tile(d.averageScore === null ? "—" : d.averageScore + "%", "Average score") +
+      tile(d.passRate === null ? "—" : d.passRate + "%", "Pass rate (≥" + d.passThreshold + "%)") +
+      "</div>";
+
+    const rows = d.byOrganisation || [];
+    if (!rows.length) {
+      html += '<p class="small muted">No assessments have been completed yet.</p>';
+    } else {
+      html +=
+        '<h3 class="small" style="margin:18px 0 8px; font-weight:700; color:var(--green-900)">By organisation</h3>' +
+        '<div class="table-wrap"><table><thead><tr>' +
+        "<th>Organisation</th><th class=\"num\">Tests taken</th><th class=\"num\">Employees</th><th class=\"num\">Avg score</th>" +
+        "</tr></thead><tbody>" +
+        rows.map(function (r) {
+          return "<tr><td>" + PC.esc(r.orgName) +
+            (r.orgCode ? ' <span class="mono small muted">' + PC.esc(r.orgCode) + "</span>" : "") + "</td>" +
+            '<td class="num"><strong>' + n(r.testsTaken) + "</strong></td>" +
+            '<td class="num">' + n(r.employees) + "</td>" +
+            '<td class="num">' + (r.averageScore === null ? "—" : r.averageScore + "%") + "</td></tr>";
+        }).join("") +
+        "</tbody></table></div>";
+    }
+
+    box.innerHTML = html;
+  }
+
+  /* ---------------- Email health Tab ---------------- */
+  async function loadEmailHealth() {
+    const box = document.getElementById("email-health-container");
+    box.innerHTML = '<p class="small muted">Checking every configured mail account…</p>';
+    let d;
+    try {
+      d = await PC.api("/admin/email/health");
+    } catch (e) {
+      box.innerHTML = '<p class="small" style="color:#dc2626">' + PC.esc(e.message) + "</p>";
+      return;
+    }
+
+    const banner = {
+      ok: ["#0e7a3d", "#e8f5ee", "✓ Email is working"],
+      degraded: ["#b45309", "#fef3c7", "▲ Email is working, but needs attention"],
+      down: ["#dc2626", "#fef2f2", "✕ Email is NOT going out"],
+      not_configured: ["#dc2626", "#fef2f2", "✕ No mail account is configured"],
+    }[d.summary] || ["#444", "#f5f5f5", d.summary];
+
+    let html =
+      '<div style="border-left:4px solid ' + banner[0] + '; background:' + banner[1] +
+      '; border-radius:6px; padding:12px 14px; margin-bottom:14px">' +
+      '<strong style="color:' + banner[0] + '">' + banner[2] + "</strong></div>";
+
+    const credits = d.totalCreditsRemaining;
+    html +=
+      '<div class="fbadmin-stats" style="margin-bottom:14px">' +
+      '<div class="fbadmin-tile"><div class="num">' + d.providerCount + '</div><div class="lbl">Mail accounts configured</div></div>' +
+      '<div class="fbadmin-tile"><div class="num">' + (credits === null || credits === undefined ? "—" : credits) +
+      '</div><div class="lbl">Sending allowance left</div></div>' +
+      '<div class="fbadmin-tile"><div class="num">' + (d.undeliveredInvites ?? 0) + '</div><div class="lbl">Invites awaiting delivery</div></div>' +
+      "</div>";
+
+    html += '<p class="small" style="margin:0 0 10px">Sending from <strong>' + PC.esc(d.from) + "</strong> — " +
+      (d.fromVerified === true
+        ? '<span style="color:#0e7a3d;font-weight:600">verified sender ✓</span>'
+        : d.fromVerified === false
+          ? '<span style="color:#dc2626;font-weight:600">NOT a verified sender ✕</span> — every send will fail until this address is verified in Brevo (Settings → Senders).'
+          : '<span class="muted">verification status unavailable</span>') + "</p>";
+
+    html += (d.providers || []).map(function (p) {
+      const okBadge = p.ok
+        ? '<span class="badge badge-good">✓ reachable</span>'
+        : '<span class="badge badge-serious">✕ failing</span>';
+      let rows = "";
+      if (p.accountEmail) rows += '<div class="small muted">Account: ' + PC.esc(p.accountEmail) + (p.company ? " · " + PC.esc(p.company) : "") + "</div>";
+      if (p.plans && p.plans.length) {
+        rows += '<div class="small muted">Plan: ' + p.plans.map(function (pl) {
+          return PC.esc(pl.type) + (typeof pl.credits === "number" ? " (" + pl.credits + " " + PC.esc(pl.creditsType || "credits") + ")" : "");
+        }).join(" · ") + "</div>";
+      }
+      if (p.status) rows += '<div class="small" style="color:#dc2626">HTTP ' + p.status + "</div>";
+      if (p.error) rows += '<div class="small" style="color:#dc2626">' + PC.esc(p.error) + "</div>";
+      if (p.hint) rows += '<div class="small" style="color:#b45309">→ ' + PC.esc(p.hint) + "</div>";
+      return '<div style="border:1px solid var(--line); border-radius:6px; padding:10px; margin-bottom:8px">' +
+        '<div class="flex spread" style="align-items:center"><strong>' + PC.esc(p.name) + "</strong>" + okBadge + "</div>" +
+        rows + "</div>";
+    }).join("");
+
+    if (d.providerCount < 2) {
+      html += '<p class="small muted" style="margin-top:12px">Only one mail account is configured. Adding another key to ' +
+        '<span class="mono">BREVO_API_KEYS</span> in Vercel (comma-separated) increases the daily ceiling — a send one ' +
+        "account rejects is retried on the next automatically.</p>";
+    }
+    if ((d.undeliveredInvites ?? 0) > 0) {
+      html += '<p class="small muted">' + d.undeliveredInvites + " invite" + (d.undeliveredInvites === 1 ? "" : "s") +
+        " still awaiting delivery — these are retried automatically every night until each one is accepted.</p>";
+    }
+
+    box.innerHTML = html;
   }
 
   /* ---------------- Feedbacks Tab ---------------- */
