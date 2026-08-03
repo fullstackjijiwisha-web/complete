@@ -126,17 +126,17 @@
 
     let html =
       '<div style="background:var(--green-900); color:#fff; border-radius:10px; padding:22px; text-align:center; margin-bottom:16px">' +
-      '<div style="font-family:var(--serif); font-size:3.2rem; font-weight:700; line-height:1">' + n(d.totalTestsTaken) + "</div>" +
-      '<div style="font-size:0.9rem; letter-spacing:0.06em; opacity:0.85; margin-top:4px">TOTAL TESTS TAKEN</div>' +
-      '<div style="font-size:0.8rem; opacity:0.7; margin-top:6px">by ' + n(d.uniqueEmployees) +
-      " employee" + (d.uniqueEmployees === 1 ? "" : "s") + " across all organisations</div></div>";
+      '<div style="font-family:var(--serif); font-size:3.2rem; font-weight:700; line-height:1">' + n(d.employeesTested) + "</div>" +
+      '<div style="font-size:0.9rem; letter-spacing:0.06em; opacity:0.85; margin-top:4px">EMPLOYEES WHO TOOK THE TEST</div>' +
+      '<div style="font-size:0.8rem; opacity:0.7; margin-top:6px">across all organisations · ' + n(d.totalAttempts) +
+      " attempt" + (d.totalAttempts === 1 ? "" : "s") + " in total, retakes included</div></div>";
 
     html +=
       '<div class="fbadmin-stats" style="margin-bottom:16px">' +
-      tile(n(d.testsThisCycle), "This cycle (" + PC.esc(d.cycle) + ")") +
-      tile(n(d.last30Days), "Last 30 days") +
-      tile(n(d.last7Days), "Last 7 days") +
-      tile(n(d.inProgress), "In progress right now") +
+      tile(n(d.employeesThisCycle), "This cycle (" + PC.esc(d.cycle) + ")") +
+      tile(n(d.employeesLast30Days), "Last 30 days") +
+      tile(n(d.employeesLast7Days), "Last 7 days") +
+      tile(n(d.employeesInProgress), "Taking the test right now") +
       tile(n(d.certificatesIssued), "Certificates issued") +
       tile(d.averageScore === null ? "—" : d.averageScore + "%", "Average score") +
       tile(d.passRate === null ? "—" : d.passRate + "%", "Pass rate (≥" + d.passThreshold + "%)") +
@@ -149,13 +149,14 @@
       html +=
         '<h3 class="small" style="margin:18px 0 8px; font-weight:700; color:var(--green-900)">By organisation</h3>' +
         '<div class="table-wrap"><table><thead><tr>' +
-        "<th>Organisation</th><th class=\"num\">Tests taken</th><th class=\"num\">Employees</th><th class=\"num\">Avg score</th>" +
+        "<th>Organisation</th><th class=\"num\">Employees who took the test</th>" +
+        "<th class=\"num\">Attempts (incl. retakes)</th><th class=\"num\">Avg score</th>" +
         "</tr></thead><tbody>" +
         rows.map(function (r) {
           return "<tr><td>" + PC.esc(r.orgName) +
             (r.orgCode ? ' <span class="mono small muted">' + PC.esc(r.orgCode) + "</span>" : "") + "</td>" +
-            '<td class="num"><strong>' + n(r.testsTaken) + "</strong></td>" +
-            '<td class="num">' + n(r.employees) + "</td>" +
+            '<td class="num"><strong>' + n(r.employeesTested) + "</strong></td>" +
+            '<td class="num">' + n(r.attempts) + "</td>" +
             '<td class="num">' + (r.averageScore === null ? "—" : r.averageScore + "%") + "</td></tr>";
         }).join("") +
         "</tbody></table></div>";

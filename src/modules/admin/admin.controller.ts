@@ -159,35 +159,39 @@ export const listOrgs: RequestHandler = async (req, res) => {
   });
 };
 
-// Super admin: platform-wide assessment activity — how many tests have
-// actually been taken, by whom, and how they went. A "test taken" is a scored
-// attempt (submitted or auto-submitted at timeout); in-progress ones are
-// counted separately so the headline number never inflates.
+// Super admin: platform-wide assessment activity. "Tests taken" counts
+// EMPLOYEES who have attempted the quiz — one person is one test, however many
+// retakes they used; the raw attempt count is reported alongside it. An
+// attempt counts once it is scored (submitted, or auto-submitted at timeout),
+// so quizzes still open never inflate the figures.
 export const assessmentStats: RequestHandler = async (_req, res) => {
   const cycle = currentCycle();
   const now = Date.now();
   const since = (days: number) => new Date(now - days * 86_400_000);
+  const scored = { status: 'scored' as const };
 
   const [
-    totalTestsTaken,
-    inProgress,
-    testsThisCycle,
-    last7Days,
-    last30Days,
-    uniqueTakers,
+    employeesTested,
+    employeesThisCycle,
+    employeesLast7Days,
+    employeesLast30Days,
+    employeesInProgress,
+    totalAttempts,
+    attemptsInProgress,
     certificatesIssued,
     scoreAgg,
     byOrgAgg,
   ] = await Promise.all([
-    AssessmentAttempt.countDocuments({ status: 'scored' }),
+    AssessmentAttempt.distinct('userId', scored),
+    AssessmentAttempt.distinct('userId', { ...scored, cycle }),
+    AssessmentAttempt.distinct('userId', { ...scored, submittedAt: { $gte: since(7) } }),
+    AssessmentAttempt.distinct('userId', { ...scored, submittedAt: { $gte: since(30) } }),
+    AssessmentAttempt.distinct('userId', { status: 'in_progress' }),
+    AssessmentAttempt.countDocuments(scored),
     AssessmentAttempt.countDocuments({ status: 'in_progress' }),
-    AssessmentAttempt.countDocuments({ status: 'scored', cycle }),
-    AssessmentAttempt.countDocuments({ status: 'scored', submittedAt: { $gte: since(7) } }),
-    AssessmentAttempt.countDocuments({ status: 'scored', submittedAt: { $gte: since(30) } }),
-    AssessmentAttempt.distinct('userId', { status: 'scored' }),
     Certificate.countDocuments({ revoked: false }),
     AssessmentAttempt.aggregate<{ _id: null; avg: number; passed: number }>([
-      { $match: { status: 'scored' } },
+      { $match: scored },
       {
         $group: {
           _id: null,
@@ -196,10 +200,11 @@ export const assessmentStats: RequestHandler = async (_req, res) => {
         },
       },
     ]),
-    AssessmentAttempt.aggregate<{ _id: Types.ObjectId; tests: number; avg: number; takers: string[] }>([
-      { $match: { status: 'scored' } },
-      { $group: { _id: '$orgId', tests: { $sum: 1 }, avg: { $avg: '$score' }, takers: { $addToSet: '$userId' } } },
-      { $sort: { tests: -1 } },
+    AssessmentAttempt.aggregate<{ _id: Types.ObjectId; attempts: number; avg: number; takers: string[] }>([
+      { $match: scored },
+      { $group: { _id: '$orgId', attempts: { $sum: 1 }, avg: { $avg: '$score' }, takers: { $addToSet: '$userId' } } },
+      // Ranked by people who took the test, matching the headline metric.
+      { $sort: { attempts: -1 } },
       { $limit: 100 },
     ]),
   ]);
@@ -211,24 +216,29 @@ export const assessmentStats: RequestHandler = async (_req, res) => {
   res.json({
     success: true,
     data: {
-      totalTestsTaken,
-      inProgress,
-      testsThisCycle,
+      // Headline: distinct employees who have attempted the quiz.
+      employeesTested: employeesTested.length,
+      employeesThisCycle: employeesThisCycle.length,
+      employeesLast7Days: employeesLast7Days.length,
+      employeesLast30Days: employeesLast30Days.length,
+      employeesInProgress: employeesInProgress.length,
+      // Supporting detail: raw attempts, retakes included.
+      totalAttempts,
+      attemptsInProgress,
       cycle,
-      last7Days,
-      last30Days,
-      uniqueEmployees: uniqueTakers.length,
       certificatesIssued,
       averageScore: round1(scoreAgg[0]?.avg),
-      passRate: totalTestsTaken ? round1(((scoreAgg[0]?.passed ?? 0) / totalTestsTaken) * 100) : null,
+      passRate: totalAttempts ? round1(((scoreAgg[0]?.passed ?? 0) / totalAttempts) * 100) : null,
       passThreshold: env.CERT_PASS_THRESHOLD,
-      byOrganisation: byOrgAgg.map((r) => ({
-        orgName: orgById.get(r._id.toString())?.name ?? '(deleted organisation)',
-        orgCode: orgById.get(r._id.toString())?.orgCode ?? '',
-        testsTaken: r.tests,
-        employees: r.takers.length,
-        averageScore: round1(r.avg),
-      })),
+      byOrganisation: byOrgAgg
+        .map((r) => ({
+          orgName: orgById.get(r._id.toString())?.name ?? '(deleted organisation)',
+          orgCode: orgById.get(r._id.toString())?.orgCode ?? '',
+          employeesTested: r.takers.length,
+          attempts: r.attempts,
+          averageScore: round1(r.avg),
+        }))
+        .sort((a, b) => b.employeesTested - a.employeesTested),
     },
   });
 };
