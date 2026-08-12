@@ -27,6 +27,15 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   // Brevo transactional email HTTP API key (xkeysib-…). Preferred over SMTP on
   // hosts that block outbound SMTP ports (e.g. Render) — it sends over HTTPS.
+  // Zoho ZeptoMail (transactional). Billed in INR — the primary provider.
+  // The API key is the "Send Mail token" from the ZeptoMail console; it is
+  // sent as `Authorization: Zoho-enczapikey <token>`.
+  ZEPTOMAIL_API_KEY: z.string().optional(),
+  ZEPTOMAIL_API_KEYS: z.string().optional(), // extra tokens, comma-separated
+  // Data centre endpoint. Defaults to the India DC (data residency, PRD §11);
+  // set to https://api.zeptomail.com/v1.1/email for a global-DC account.
+  ZEPTOMAIL_API_URL: z.string().default('https://api.zeptomail.in/v1.1/email'),
+
   BREVO_API_KEY: z.string().optional(),
   // Extra Brevo keys (comma-separated). Each account carries its own daily
   // sending allowance, so listing more keys raises the ceiling: a send that
