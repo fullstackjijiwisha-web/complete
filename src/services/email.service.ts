@@ -11,8 +11,8 @@ import { logger } from '../utils/logger';
 // With none configured, messages are logged instead of sent (local dev).
 interface Provider {
   name: string;
-  kind: 'zeptomail' | 'brevo' | 'smtp';
-  apiKey?: string; // API providers only — used by the health check, never exposed
+  kind: 'brevo' | 'smtp';
+  apiKey?: string; // brevo only — used by the health check, never exposed
   send: (message: EmailMessage) => Promise<void>;
 }
 
@@ -69,75 +69,8 @@ async function sendViaBrevo(apiKey: string, message: EmailMessage): Promise<void
   }
 }
 
-const MIME_BY_EXT: Record<string, string> = {
-  pdf: 'application/pdf',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  csv: 'text/csv',
-  txt: 'text/plain',
-  html: 'text/html',
-};
-
-function mimeFor(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
-  return MIME_BY_EXT[ext] ?? 'application/octet-stream';
-}
-
-// Zoho ZeptoMail transactional API. The key is a "Send Mail token" and must be
-// sent verbatim after the `Zoho-enczapikey ` prefix. The sending domain has to
-// be verified in the ZeptoMail console — free-webmail senders are rejected.
-async function sendViaZeptoMail(apiKey: string, message: EmailMessage): Promise<void> {
-  const cc = ccList(message.cc).map((c) => ({ email_address: { address: c.email } }));
-  const res = await fetch(env.ZEPTOMAIL_API_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Zoho-enczapikey ${apiKey}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({
-      from: { address: env.EMAIL_FROM, name: 'POSH Compass' },
-      to: [{ email_address: { address: message.to } }],
-      ...(cc.length ? { cc } : {}),
-      subject: message.subject,
-      textbody: message.text,
-      ...(message.attachments?.length
-        ? {
-            attachments: message.attachments.map((a) => ({
-              name: a.filename,
-              content: a.content.toString('base64'),
-              mime_type: mimeFor(a.filename),
-            })),
-          }
-        : {}),
-    }),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`ZeptoMail API ${res.status}: ${detail.slice(0, 200)}`);
-  }
-}
-
 function buildProviders(): Provider[] {
   const list: Provider[] = [];
-
-  // ZeptoMail first — the primary provider (INR billing, India data centre).
-  const zeptoKeys = [env.ZEPTOMAIL_API_KEY, ...(env.ZEPTOMAIL_API_KEYS ?? '').split(',')]
-    .map((k) => (k ?? '').trim())
-    .filter(Boolean);
-  const zeptoSeen = new Set<string>();
-  zeptoKeys.forEach((key, i) => {
-    if (zeptoSeen.has(key)) return;
-    zeptoSeen.add(key);
-    list.push({
-      name: `zeptomail${i === 0 ? '' : `#${i + 1}`}`,
-      kind: 'zeptomail',
-      apiKey: key,
-      send: (message) => sendViaZeptoMail(key, message),
-    });
-  });
-
   const keys = [env.BREVO_API_KEY, ...(env.BREVO_API_KEYS ?? '').split(',')]
     .map((k) => (k ?? '').trim())
     .filter(Boolean);
@@ -154,7 +87,7 @@ function buildProviders(): Provider[] {
   });
 
   if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
-    smtpTransporter = nodemailer.createTransport({
+    const transporter: Transporter = nodemailer.createTransport({
       host: env.SMTP_HOST,
       port: env.SMTP_PORT ?? 465,
       secure: (env.SMTP_PORT ?? 465) === 465,
@@ -164,15 +97,12 @@ function buildProviders(): Provider[] {
       name: 'smtp',
       kind: 'smtp',
       send: async (message) => {
-        await smtpTransporter!.sendMail({ from: env.EMAIL_FROM, ...message });
+        await transporter.sendMail({ from: env.EMAIL_FROM, ...message });
       },
     });
   }
   return list;
 }
-
-// Kept module-level so the health check can verify() the same connection.
-let smtpTransporter: Transporter | null = null;
 
 const providers = buildProviders();
 
@@ -203,7 +133,7 @@ export function emailProviderNames(): string[] {
 // address is verified. API keys are used but never returned.
 export interface ProviderHealth {
   name: string;
-  kind: 'zeptomail' | 'brevo' | 'smtp';
+  kind: 'brevo' | 'smtp';
   ok: boolean;
   status?: number;
   error?: string;
@@ -229,17 +159,6 @@ interface BrevoPlan {
   type?: string;
   creditsType?: string;
   credits?: number;
-}
-
-function zeptoHint(status: number | undefined, body: string): string | undefined {
-  if (status === 401 || status === 403) {
-    return 'Send Mail token rejected — check ZEPTOMAIL_API_KEY, and confirm ZEPTOMAIL_API_URL matches your account\'s data centre (.in for India, .com for global).';
-  }
-  if (/domain|sender/i.test(body)) {
-    return `The sending domain for ${env.EMAIL_FROM} is not verified in ZeptoMail — verify the domain (SPF/DKIM) and send from an address on it.`;
-  }
-  if (status === 429) return 'ZeptoMail is rate-limiting — sends are retried on the next provider and by the nightly retry.';
-  return undefined;
 }
 
 function hintFor(status: number | undefined, body: string): string | undefined {
@@ -273,64 +192,12 @@ export async function checkEmailHealth(): Promise<EmailHealth> {
   let sendersList: Array<{ email: string; active: boolean }> | undefined;
 
   for (const p of providers) {
-    if (p.kind === 'zeptomail' && p.apiKey) {
-      // ZeptoMail exposes no account endpoint, so authenticate against the
-      // send endpoint with an empty payload: 401/403 means the token is bad,
-      // while a 400 proves the credentials were accepted. No mail is sent.
-      try {
-        const res = await fetch(env.ZEPTOMAIL_API_URL, {
-          method: 'POST',
-          headers: {
-            Authorization: `Zoho-enczapikey ${p.apiKey}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: '{}',
-          signal: AbortSignal.timeout(8000),
-        });
-        const body = await res.text().catch(() => '');
-        const authFailed = res.status === 401 || res.status === 403;
-        results.push({
-          name: p.name,
-          kind: 'zeptomail',
-          ok: !authFailed,
-          ...(authFailed ? { status: res.status, error: body.slice(0, 200) } : {}),
-          ...(zeptoHint(res.status, body) ? { hint: zeptoHint(res.status, body)! } : {}),
-          ...(authFailed
-            ? {}
-            : { hint: 'Token accepted. Remaining credits are shown in the ZeptoMail console.' }),
-        });
-      } catch (err) {
-        results.push({
-          name: p.name,
-          kind: 'zeptomail',
-          ok: false,
-          error: (err as Error).message.slice(0, 200),
-          hint: 'Could not reach the ZeptoMail API (network/timeout).',
-        });
-      }
+    if (p.kind !== 'brevo' || !p.apiKey) {
+      // SMTP has no account API — presence is all we can report without
+      // sending a probe message.
+      results.push({ name: p.name, kind: 'smtp', ok: true, hint: 'Configured as a fallback (status is only proven by an actual send).' });
       continue;
     }
-
-    if (p.kind === 'smtp') {
-      // A real connect + authenticate, so SMTP problems surface here rather
-      // than silently failing on the next invite run.
-      try {
-        await smtpTransporter?.verify();
-        results.push({ name: p.name, kind: 'smtp', ok: true, hint: 'Connected and authenticated.' });
-      } catch (err) {
-        results.push({
-          name: p.name,
-          kind: 'smtp',
-          ok: false,
-          error: (err as Error).message.slice(0, 200),
-          hint: 'SMTP host rejected the connection or credentials — check SMTP_HOST/PORT/USER/PASS.',
-        });
-      }
-      continue;
-    }
-
-    if (p.kind !== 'brevo' || !p.apiKey) continue;
     try {
       const { status, body } = await brevoGet(p.apiKey, '/account');
       if (status !== 200) {

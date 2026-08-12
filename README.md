@@ -80,7 +80,6 @@ CI baseline (blueprint §9): `npm ci` → `npm run typecheck` → tests (when ad
 
 - Vercel deployment is supported through `vercel.json`: it serves the static frontend from `Frontend/extracted/` and rewrites `/api/v1/*`, `/health`, and `/ready` to the serverless API entrypoint.
 - Set `MONGODB_URI`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, and `CORS_ORIGINS` in Vercel. Use Atlas or another hosted MongoDB; the local memory server stays for local dev only.
-- **Email** is a provider chain tried in order — ZeptoMail (`ZEPTOMAIL_API_KEY`), Brevo (`BREVO_API_KEY`), then SMTP — so a send one account rejects (daily allowance, outage) is retried on the next, and total capacity is the sum of the accounts configured. `EMAIL_FROM` must be on a domain verified with the provider. Anything still undelivered is retried nightly by `/api/v1/cron/invite-drain` (see `vercel.json` crons; guard it with `CRON_SECRET`). Super Admin → **Email health** reports each account's status live.
 - The refresh cookie remains same-origin on Vercel because the frontend and API share the same deployment domain.
 - `trust proxy` is already on (needed for rate-limit + secure cookies behind Render/Railway/Vercel).
 - Audit document upload stores metadata only — object storage (signed S3/Cloudinary upload) is an open infra decision (PRD §16).
