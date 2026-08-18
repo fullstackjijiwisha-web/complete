@@ -1150,3 +1150,22 @@ details.data-view .data-table { min-width: 0; }
 .fbadmin-ratings .star { color: #f5b301; }
 .fbadmin-sugg { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .fbadmin-comment { font-size: 0.85rem; color: var(--ink-2); margin-top: 8px; background: var(--surface); border-left: 3px solid var(--green-100); padding: 8px 12px; border-radius: 0 8px 8px 0; white-space: pre-wrap; }
+
+/* Bulk certificate print (super admin → all certificates of one organisation).
+   The single-certificate rules pin #print-cert-root to one viewport height;
+   in bulk mode the root grows and each .cert-page takes exactly one page. */
+@media print {
+  body.print-cert-mode #print-cert-root.cert-bulk { height: auto; overflow: visible; }
+  body.print-cert-mode #print-cert-root.cert-bulk .cert-page {
+    height: 100vh;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  body.print-cert-mode #print-cert-root.cert-bulk .cert-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  body.print-cert-mode #print-cert-root.cert-bulk .jiji-cert-wrap { height: 100%; }
+  body.print-cert-mode #print-cert-root.cert-bulk .jiji-cert { aspect-ratio: auto; height: 100%; }
+}

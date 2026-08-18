@@ -664,6 +664,7 @@
             </div>
             <div class="flex" style="gap:8px; align-items:center; flex-shrink:0">
               <button class="btn btn-ghost btn-sm admin-invite-status" data-org-id="${org._id}">📶 Invite status</button>
+              <button class="btn btn-ghost btn-sm admin-bulk-certs" data-org-id="${org._id}" data-org-name="${PC.esc(org.name)}">🎓 Certificates (PDF)</button>
               <a href="#" class="btn btn-ghost btn-sm admin-dl-doc-btn"
                  data-path="/admin/orgs/${org._id}/employees/export"
                  data-filename="${PC.esc(org.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "organisation")}-employees.csv">⬇ Employees (CSV)</a>
@@ -752,6 +753,67 @@
     document.querySelectorAll(".admin-invite-status").forEach(btn => {
       btn.addEventListener("click", () => loadInviteStatus(btn.dataset.orgId));
     });
+
+    document.querySelectorAll(".admin-bulk-certs").forEach(btn => {
+      btn.addEventListener("click", () => bulkCertificates(btn, btn.dataset.orgId, btn.dataset.orgName));
+    });
+  }
+
+  /* ── Bulk certificates: every certificate issued to one organisation,
+     rendered on the branded template and printed as ONE document (each
+     certificate on its own A4 landscape page). Save as PDF in the print
+     dialog to get a single consolidated file. ── */
+  async function bulkCertificates(btn, orgId, orgName) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Loading…";
+    let d;
+    try {
+      d = await PC.api("/admin/orgs/" + orgId + "/certificates");
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = original;
+      return PC.alertModal("Could not load certificates", PC.esc(e.message));
+    }
+    btn.disabled = false;
+    btn.textContent = original;
+
+    const certs = d.certificates || [];
+    if (!certs.length) {
+      return PC.alertModal("No certificates yet",
+        PC.esc(d.orgName) + " has no issued certificates — employees are certified once they score " +
+        d.passThreshold + "% or above.");
+    }
+
+    const ok = await PC.confirmModal(
+      "Download " + certs.length + " certificate" + (certs.length === 1 ? "" : "s"),
+      "All <strong>" + certs.length + "</strong> certificates issued to <strong>" + PC.esc(d.orgName) +
+      "</strong> will be prepared as one document — one certificate per page." +
+      "<br><br>Your browser's print dialog opens next: choose <strong>Destination → Save as PDF</strong> " +
+      "to get a single consolidated file." +
+      (certs.length > 100
+        ? '<br><br><span style="color:#b45309">This is a large batch — rendering may take a few seconds and the PDF will be ' +
+          certs.length + " pages.</span>"
+        : ""),
+      "Prepare PDF",
+    );
+    if (!ok) return;
+
+    const items = certs.map(function (c) {
+      return {
+        title: "Certificate of Completion",
+        name: PC.esc(c.employeeName),
+        bodyHtml:
+          "has successfully completed the POSH Assessment<br>with a score of <strong>" +
+          c.score + "%</strong> (threshold: " + d.passThreshold + "%)",
+        subLine: PC.esc(d.orgName) + " · Assessed on the POSH Compass platform",
+        refLine:
+          "Certificate ID: " + PC.esc(c.certId) +
+          " · Cycle: " + PC.esc(c.cycle) +
+          " · Issued: " + new Date(c.issuedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+      };
+    });
+    PC.printCertificateBundle(items);
   }
 
   /* ── Invite delivery panel: who activated, who completed the test, and who

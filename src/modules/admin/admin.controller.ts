@@ -436,6 +436,48 @@ export const adminResendOrgInvites: RequestHandler = async (req, res) => {
   });
 };
 
+// Super admin: every certificate issued to one organisation's employees, in
+// the shape the branded certificate template renders — so the panel can print
+// them all into a single consolidated PDF. Access is audit-logged (PII).
+export const orgCertificates: RequestHandler = async (req, res) => {
+  const org = await Organisation.findById(req.params.id);
+  if (!org) throw ApiError.notFound();
+
+  const certs = await Certificate.find({ orgId: org._id, revoked: false })
+    .sort({ issuedAt: 1 })
+    .select('certId userId score scoreBand cycle issuedAt');
+  const users = await User.find({ _id: { $in: certs.map((c) => c.userId) } }).select(
+    'name employeeCode email',
+  );
+  const userById = new Map(users.map((u) => [u.id as string, u]));
+
+  await logAudit('admin.org_certificates_exported', 'Organisation', org.id, authUser(req).id, {
+    certificates: certs.length,
+  });
+
+  res.json({
+    success: true,
+    data: {
+      orgName: org.name,
+      orgCode: org.orgCode,
+      passThreshold: env.CERT_PASS_THRESHOLD,
+      certificates: certs.map((c) => {
+        const u = userById.get(c.userId.toString());
+        return {
+          certId: c.certId,
+          employeeName: u?.name ?? '(employee removed)',
+          employeeCode: u?.employeeCode ?? '',
+          score: c.score,
+          scoreBand: c.scoreBand,
+          cycle: c.cycle,
+          issuedAt: c.issuedAt,
+          verifyUrl: `${env.CERT_VERIFY_BASE_URL}/${c.certId}`,
+        };
+      }),
+    },
+  });
+};
+
 // Super admin: download an organisation's enrolled employees as CSV —
 // roster columns plus this cycle's assessment standing (attempts, best
 // score, certificate). Access is audit-logged.

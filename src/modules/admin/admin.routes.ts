@@ -59,6 +59,9 @@ adminRoutes.delete('/questions/:id', controller.deleteQuestion);
 adminRoutes.get('/orgs', controller.listOrgs);
 // Roster + assessment-standing CSV of one organisation's enrolled employees.
 adminRoutes.get('/orgs/:id/employees/export', controller.exportOrgEmployees);
+// Every certificate issued to an organisation — powers the bulk certificate
+// download (all certificates printed into one consolidated PDF).
+adminRoutes.get('/orgs/:id/certificates', controller.orgCertificates);
 // Invite delivery & progress counts for one organisation, and org-scoped
 // batched resend (scope 'expired' = only dead links; 'all_pending' = everyone
 // not yet activated).

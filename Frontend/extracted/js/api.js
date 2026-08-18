@@ -877,6 +877,42 @@
     window.print();
   };
 
+  /* Prints MANY certificates as one document — each on its own A4 landscape
+     page — so a whole organisation's certificates save as a single PDF.
+     Same isolation trick as printCertificate: #print-cert-root is a direct
+     body child and every sibling is display:none'd while printing. */
+  PC.printCertificateBundle = function (list) {
+    if (!list || !list.length) return 0;
+    let root = document.getElementById("print-cert-root");
+    if (!root) {
+      root = document.createElement("div");
+      root.id = "print-cert-root";
+      document.body.appendChild(root);
+    }
+    root.classList.add("cert-bulk");
+    root.innerHTML = list
+      .map(function (o) { return '<div class="cert-page">' + PC.buildCertificateHtml(o) + "</div>"; })
+      .join("");
+
+    const pageStyle = document.createElement("style");
+    pageStyle.id = "print-cert-page";
+    pageStyle.textContent = "@page { size: A4 landscape; margin: 0; }";
+    document.head.appendChild(pageStyle);
+
+    document.body.classList.add("print-cert-mode");
+    const cleanup = function () {
+      document.body.classList.remove("print-cert-mode");
+      root.classList.remove("cert-bulk");
+      root.innerHTML = "";
+      const s = document.getElementById("print-cert-page");
+      if (s) s.remove();
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+    return list.length;
+  };
+
   /* ---------------- session-aware nav ---------------- */
   function renderSessionUi(user) {
     const cta = document.querySelector(".nav-cta");
