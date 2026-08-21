@@ -3,7 +3,12 @@ import bcrypt from 'bcryptjs';
 import { Question } from '../questions/question.model';
 import { Organisation } from '../organisations/organisation.model';
 import { OrgWipeBackup } from '../organisations/orgWipeBackup.model';
-import { previewOrganisationWipe, wipeAllOrganisations } from '../organisations/organisation.reset';
+import {
+  previewOrganisationWipe,
+  wipeAllOrganisations,
+  previewOrganisationDelete,
+  deleteOrganisation,
+} from '../organisations/organisation.reset';
 import { User } from '../users/user.model';
 import { Invite } from '../auth/invite.model';
 import { issueInvite } from '../employees/employee.service';
@@ -541,6 +546,35 @@ export const exportOrgEmployees: RequestHandler = async (req, res) => {
     .type('text/csv')
     .setHeader('Content-Disposition', `attachment; filename="${safeName}-employees.csv"`)
     .send(csv);
+};
+
+// Super admin: remove ONE organisation permanently. Used when a client wants
+// to start over — a soft delete would leave the org code and the HR admin's
+// email taken, so re-registration would keep failing. The preview reports
+// exactly what will go, including which logins are freed.
+export const previewDeleteOrg: RequestHandler = async (req, res) => {
+  const preview = await previewOrganisationDelete(req.params.id as string);
+  if (!preview) throw ApiError.notFound();
+  res.json({ success: true, data: preview });
+};
+
+export const deleteOrg: RequestHandler = async (req, res) => {
+  const org = await Organisation.findById(req.params.id).select('orgCode name');
+  if (!org) throw ApiError.notFound();
+  // Typing the organisation's own code is the confirmation — it cannot be
+  // triggered by a replayed or accidental request against the wrong org.
+  if (req.body.confirm !== org.orgCode) {
+    throw ApiError.badRequest(
+      `Type the organisation code (${org.orgCode}) to confirm deletion`,
+      'CONFIRMATION_MISMATCH',
+    );
+  }
+  const result = await deleteOrganisation(req.params.id as string, authUser(req).id);
+  if (!result) throw ApiError.notFound();
+  res.json({
+    success: true,
+    data: { deleted: true, name: org.name, orgCode: org.orgCode, ...result },
+  });
 };
 
 export const patchOrg: RequestHandler = async (req, res) => {

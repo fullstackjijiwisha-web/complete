@@ -669,6 +669,7 @@
                  data-path="/admin/orgs/${org._id}/employees/export"
                  data-filename="${PC.esc(org.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "organisation")}-employees.csv">⬇ Employees (CSV)</a>
               <button class="btn btn-ghost btn-sm btn-toggle-seats" data-org-id="${org._id}" data-seats-active="${org.seatsActive}">${seatBtnText}</button>
+              <button class="btn btn-sm admin-delete-org" data-org-id="${org._id}" style="background:#fef2f2; color:#dc2626; border:1px solid #dc2626">🗑 Delete</button>
             </div>
           </div>
         </div>
@@ -757,6 +758,83 @@
     document.querySelectorAll(".admin-bulk-certs").forEach(btn => {
       btn.addEventListener("click", () => bulkCertificates(btn, btn.dataset.orgId, btn.dataset.orgName));
     });
+
+    document.querySelectorAll(".admin-delete-org").forEach(btn => {
+      btn.addEventListener("click", () => deleteOrganisation(btn, btn.dataset.orgId));
+    });
+  }
+
+  /* ── Delete ONE organisation. Hard delete by design: the organisation code
+     and the HR admin's email are unique, so anything softer would leave both
+     taken and re-registration would keep failing. A backup is written first,
+     and the confirmation is the organisation's own code so it can never hit
+     the wrong row. ── */
+  async function deleteOrganisation(btn, orgId) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+    let p;
+    try {
+      p = await PC.api("/admin/orgs/" + orgId + "/delete-preview");
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = original;
+      return PC.alertModal("Could not load the organisation", PC.esc(e.message));
+    }
+    btn.disabled = false;
+    btn.textContent = original;
+
+    const c = p.counts || {};
+    const freed = (p.hrEmails || []).length
+      ? "<br><br>These logins become free to register again:<br><strong>" +
+        p.hrEmails.map(function (e) { return PC.esc(e); }).join("<br>") + "</strong>"
+      : "";
+    // confirmModal removes the dialog before it resolves, so the typed code is
+    // captured live as it changes rather than read back afterwards.
+    let typedCode = "";
+    const onInput = function (e) {
+      if (e.target && e.target.id === "del-org-confirm") typedCode = e.target.value;
+    };
+    document.addEventListener("input", onInput);
+    const ok = await PC.confirmModal(
+      "Delete " + PC.esc(p.name) + "?",
+      "This permanently removes the organisation and everything belonging to it:" +
+      '<br><br><span class="mono">' +
+      c.users + " accounts (HR + employees)<br>" +
+      c.attempts + " assessment attempts<br>" +
+      c.certificates + " certificates<br>" +
+      c.audits + " audits · " + c.payments + " payments · " + c.invites + " pending invites" +
+      "</span>" +
+      "<br><br>Issued certificates stop verifying publicly. A backup is saved first, but nothing is restored automatically." +
+      freed +
+      '<br><br>Type <strong>' + PC.esc(p.orgCode) + '</strong> below to confirm:' +
+      '<br><input type="text" id="del-org-confirm" autocomplete="off" placeholder="' + PC.esc(p.orgCode) +
+      '" style="width:100%; margin-top:8px; padding:8px; border:1px solid var(--line); border-radius:6px">',
+      "Delete permanently",
+    );
+    document.removeEventListener("input", onInput);
+    if (!ok) return;
+
+    if (typedCode.trim() !== p.orgCode) {
+      return PC.alertModal("Not deleted",
+        "The code you typed did not match <strong>" + PC.esc(p.orgCode) + "</strong>, so nothing was removed.");
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Deleting…";
+    try {
+      const r = await PC.api("/admin/orgs/" + orgId, { method: "DELETE", body: { confirm: p.orgCode } });
+      PC.alertModal("Organisation deleted",
+        "<strong>" + PC.esc(r.name) + "</strong> (" + PC.esc(r.orgCode) + ") was removed along with " +
+        r.counts.users + " accounts and " + r.counts.certificates + " certificates. " +
+        "They can now register again from scratch." +
+        '<br><br><span class="small muted">Backup reference: ' + PC.esc(r.backupId) + "</span>");
+      loadOrgs();
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = original;
+      PC.alertModal("Delete failed", PC.esc(e.message));
+    }
   }
 
   /* ── Bulk certificates: every certificate issued to one organisation,

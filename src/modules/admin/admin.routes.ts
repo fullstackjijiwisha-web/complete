@@ -62,6 +62,17 @@ adminRoutes.get('/orgs/:id/employees/export', controller.exportOrgEmployees);
 // Every certificate issued to an organisation — powers the bulk certificate
 // download (all certificates printed into one consolidated PDF).
 adminRoutes.get('/orgs/:id/certificates', controller.orgCertificates);
+
+// Permanently remove ONE organisation (so it can register again from scratch).
+// A hard delete: the org code and the HR admin's email are unique, so nothing
+// less would let them re-register. Backed up first, confirmation phrase is the
+// organisation's own code.
+adminRoutes.get('/orgs/:id/delete-preview', controller.previewDeleteOrg);
+adminRoutes.delete(
+  '/orgs/:id',
+  validate(z.object({ confirm: z.string().min(1) })),
+  controller.deleteOrg,
+);
 // Invite delivery & progress counts for one organisation, and org-scoped
 // batched resend (scope 'expired' = only dead links; 'all_pending' = everyone
 // not yet activated).

@@ -122,3 +122,118 @@ export async function wipeAllOrganisations(
 
   return { backupId: backupDoc.id, counts, backup };
 }
+
+// ── Single organisation ──────────────────────────────────────────────────
+// Deleting ONE organisation, as opposed to the platform-wide wipe above.
+// This is a HARD delete on purpose: the HR admin's email address and the
+// organisation code are unique, so a soft delete would leave both taken and
+// the organisation could never re-register. Everything is snapshotted into
+// OrgWipeBackup first, and certificates issued to its employees go with it —
+// their public verification links stop resolving, which is the intended
+// meaning of "this organisation was removed".
+
+export interface OrgDeletePreview {
+  orgId: string;
+  name: string;
+  orgCode: string;
+  // HR admin logins that are freed for re-registration by this delete.
+  hrEmails: string[];
+  counts: WipeCounts;
+}
+
+function orgScope(orgId: string) {
+  return { orgId: new Types.ObjectId(orgId) };
+}
+
+export async function previewOrganisationDelete(orgId: string): Promise<OrgDeletePreview | null> {
+  const org = await Organisation.findById(orgId).lean();
+  if (!org) return null;
+  const scope = orgScope(orgId);
+  const hrAdmins = await User.find({ ...scope, role: 'hr_admin' }).select('email').lean();
+  const [users, attempts, certificates, audits, payments, invites] = await Promise.all([
+    User.countDocuments({ ...scope, role: { $in: ORG_SCOPED_ROLES } }),
+    AssessmentAttempt.countDocuments(scope),
+    Certificate.countDocuments(scope),
+    Audit.countDocuments(scope),
+    Payment.countDocuments(scope),
+    Invite.countDocuments(scope),
+  ]);
+  return {
+    orgId: String(org._id),
+    name: org.name,
+    orgCode: org.orgCode,
+    hrEmails: hrAdmins.map((u) => u.email),
+    counts: { organisations: 1, users, attempts, certificates, audits, payments, invites },
+  };
+}
+
+export async function deleteOrganisation(
+  orgId: string,
+  performedByUserId?: string,
+): Promise<WipeResult | null> {
+  const org = await Organisation.findById(orgId).lean();
+  if (!org) return null;
+  const scope = orgScope(orgId);
+  const userFilter = { ...scope, role: { $in: ORG_SCOPED_ROLES } };
+
+  const [users, attempts, certificates, audits, payments, invites] = await Promise.all([
+    User.find(userFilter).lean(),
+    AssessmentAttempt.find(scope).lean(),
+    Certificate.find(scope).lean(),
+    Audit.find(scope).lean(),
+    Payment.find(scope).lean(),
+    Invite.find(scope).lean(),
+  ]);
+
+  const counts: WipeCounts = {
+    organisations: 1,
+    users: users.length,
+    attempts: attempts.length,
+    certificates: certificates.length,
+    audits: audits.length,
+    payments: payments.length,
+    invites: invites.length,
+  };
+  const backup: Record<string, unknown[]> = {
+    organisations: [org],
+    users,
+    attempts,
+    certificates,
+    audits,
+    payments,
+    invites,
+  };
+
+  const backupDoc = await OrgWipeBackup.create({
+    triggeredBy: `delete-org:${org.orgCode}`,
+    performedBy: performedByUserId ? new Types.ObjectId(performedByUserId) : undefined,
+    performedAt: new Date(),
+    counts,
+    data: backup,
+  });
+
+  // Release any audit slots this organisation had booked (see wipeAll above).
+  const slotIds = audits.map((a) => a.slotId).filter((id): id is Types.ObjectId => Boolean(id));
+  if (slotIds.length) {
+    await AuditSlot.updateMany({ _id: { $in: slotIds } }, { $set: { isBooked: false } });
+  }
+
+  await Promise.all([
+    Organisation.deleteOne({ _id: org._id }),
+    User.deleteMany(userFilter),
+    AssessmentAttempt.deleteMany(scope),
+    Certificate.deleteMany(scope),
+    Audit.deleteMany(scope),
+    Payment.deleteMany(scope),
+    Invite.deleteMany(scope),
+  ]);
+
+  await logAudit('admin.organisation_deleted', 'Organisation', String(org._id), performedByUserId, {
+    backupId: backupDoc.id,
+    name: org.name,
+    orgCode: org.orgCode,
+    counts,
+  });
+
+  return { backupId: backupDoc.id, counts, backup };
+}
