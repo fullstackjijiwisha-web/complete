@@ -662,7 +662,7 @@
               ${reviewPanelHtml}
               <div id="invite-status-${org._id}"></div>
             </div>
-            <div class="flex" style="gap:8px; align-items:center; flex-shrink:0">
+            <div class="flex" style="gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end">
               <button class="btn btn-ghost btn-sm admin-invite-status" data-org-id="${org._id}">📶 Invite status</button>
               <button class="btn btn-ghost btn-sm admin-bulk-certs" data-org-id="${org._id}" data-org-name="${PC.esc(org.name)}">🎓 Certificates (PDF)</button>
               <a href="#" class="btn btn-ghost btn-sm admin-dl-doc-btn"
