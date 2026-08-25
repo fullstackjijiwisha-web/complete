@@ -24,6 +24,8 @@ export const registerOrgSchema = z.object({
     })
     .optional(),
   headcount: z.number().int().min(1).max(1_000_000),
+  // Sponsored-access code from a super-admin link: waives the payment step.
+  inviteCode: z.string().min(4).max(64).optional(),
   adminName: z.string().min(2).max(120),
   email: z.string().email().max(254),
   adminMobile: z.string().max(20).optional(),

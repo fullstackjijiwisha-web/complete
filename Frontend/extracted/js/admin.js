@@ -56,6 +56,7 @@
       this.disabled = false;
     });
 
+    document.getElementById("btn-create-sponsor").addEventListener("click", createSponsorLink);
     document.getElementById("btn-refresh-feedback").addEventListener("click", loadFeedback);
     document.getElementById("btn-refresh-email").addEventListener("click", loadEmailHealth);
     document.getElementById("btn-refresh-tests").addEventListener("click", loadTestStats);
@@ -102,7 +103,7 @@
     });
     if (tab === "questions") loadQuestions();
     if (tab === "tests") loadTestStats();
-    if (tab === "orgs") loadOrgs();
+    if (tab === "orgs") { loadOrgs(); loadSponsorLinks(); }
     if (tab === "feedback") loadFeedback();
     if (tab === "email") loadEmailHealth();
   }
@@ -484,6 +485,130 @@
     }
   }
 
+
+  /* -- Sponsored access links: registration with payment inside the package.
+     The link carries a code; the register form validates it and, on submit,
+     the server activates seats immediately. Only this panel can mint one. -- */
+  async function loadSponsorLinks() {
+    const box = document.getElementById("sponsor-list");
+    if (!box) return;
+    let items;
+    try {
+      items = await PC.api("/admin/org-invites");
+    } catch (e) {
+      box.innerHTML = '<p class="small" style="color:#dc2626">' + PC.esc(e.message) + "</p>";
+      return;
+    }
+    if (!items.length) {
+      box.innerHTML = '<p class="small muted">No sponsored links yet.</p>';
+      return;
+    }
+    box.innerHTML = items.map(function (i) {
+      const dead = i.revoked || i.expired || i.exhausted;
+      const state = i.revoked
+        ? '<span class="badge badge-serious">Revoked</span>'
+        : i.exhausted
+          ? '<span class="badge badge-neutral">Fully used</span>'
+          : i.expired
+            ? '<span class="badge badge-warning">Expired</span>'
+            : '<span class="badge badge-good">Active - ' + i.remaining + " left</span>";
+      const used = (i.usedBy || []).length
+        ? '<div class="small muted" style="margin-top:4px">Used by: ' +
+          i.usedBy.map(function (u) { return PC.esc(u.orgName); }).join(", ") + "</div>"
+        : "";
+      return '<div style="border:1px solid var(--line); border-radius:6px; padding:10px; margin-bottom:8px' +
+        (dead ? "; opacity:0.6" : "") + '">' +
+        '<div class="flex spread" style="align-items:center; gap:8px; flex-wrap:wrap">' +
+        "<strong>" + PC.esc(i.label) + "</strong>" + state + "</div>" +
+        '<div class="mono small" style="margin-top:6px; word-break:break-all">' + PC.esc(i.url) + "</div>" +
+        '<div class="flex" style="gap:6px; margin-top:8px; flex-wrap:wrap">' +
+        (dead ? "" : '<button class="btn btn-sm btn-ghost sponsor-copy" data-url="' + PC.esc(i.url) + '">Copy link</button>') +
+        (dead ? "" : '<button class="btn btn-sm btn-ghost sponsor-revoke" data-id="' + i.id + '" data-label="' + PC.esc(i.label) + '" style="color:#dc2626; border-color:#dc2626">Revoke</button>') +
+        "</div>" + used + "</div>";
+    }).join("");
+
+    box.querySelectorAll(".sponsor-copy").forEach(function (btn) {
+      btn.addEventListener("click", function () { copyText(btn.dataset.url, btn); });
+    });
+    box.querySelectorAll(".sponsor-revoke").forEach(function (btn) {
+      btn.addEventListener("click", function () { revokeSponsorLink(btn.dataset.id, btn.dataset.label); });
+    });
+  }
+
+  function copyText(text, btn) {
+    const done = function () {
+      const label = btn.textContent;
+      btn.textContent = "Copied";
+      setTimeout(function () { btn.textContent = label; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
+
+  function fallbackCopy(text, done) {
+    // The Clipboard API needs a secure context; this keeps copy working elsewhere.
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) { /* user can select manually */ }
+    ta.remove();
+  }
+
+  async function createSponsorLink() {
+    const btn = document.getElementById("btn-create-sponsor");
+    const msg = document.getElementById("sponsor-msg");
+    const label = document.getElementById("sponsor-label").value.trim();
+    const maxUses = parseInt(document.getElementById("sponsor-max-uses").value, 10) || 1;
+    const expiry = parseInt(document.getElementById("sponsor-expiry").value, 10);
+    if (label.length < 2) {
+      msg.style.color = "#dc2626";
+      msg.textContent = "Give the link a label so you can tell them apart later.";
+      return;
+    }
+    btn.disabled = true;
+    msg.style.color = "";
+    msg.textContent = "Generating...";
+    try {
+      const body = { label: label, maxUses: maxUses };
+      if (expiry > 0) body.expiresInDays = expiry;
+      const r = await PC.api("/admin/org-invites", { method: "POST", body: body });
+      msg.style.color = "#0e7a3d";
+      msg.textContent = "Link created - copy it from the list below and send it to the organisation.";
+      document.getElementById("sponsor-label").value = "";
+      document.getElementById("sponsor-expiry").value = "";
+      loadSponsorLinks();
+      PC.alertModal("Sponsored link ready",
+        "Send this to <strong>" + PC.esc(r.label) + "</strong>:" +
+        '<br><br><span class="mono" style="word-break:break-all">' + PC.esc(r.url) + "</span>" +
+        "<br><br>They register as usual with payment inside the package - their seats activate immediately.");
+    } catch (e) {
+      msg.style.color = "#dc2626";
+      msg.textContent = e.message;
+    }
+    btn.disabled = false;
+  }
+
+  async function revokeSponsorLink(id, label) {
+    const ok = await PC.confirmModal(
+      "Revoke this link?",
+      "The link for <strong>" + PC.esc(label) + "</strong> stops working immediately. " +
+      "Organisations that already registered with it keep their seats.",
+      "Revoke",
+    );
+    if (!ok) return;
+    try {
+      await PC.api("/admin/org-invites/" + id, { method: "DELETE" });
+      loadSponsorLinks();
+    } catch (e) {
+      PC.alertModal("Could not revoke", PC.esc(e.message));
+    }
+  }
 
   /* ---------------- Organisations Tab ---------------- */
   async function loadOrgs() {

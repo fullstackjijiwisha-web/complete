@@ -151,6 +151,7 @@
 
       '<form id="auth-register" class="hidden">' +
       '<h2>Register your organisation</h2><p class="small muted mb-2">Creates the organisation record and your HR admin account.</p>' +
+      '<div id="reg-sponsor-banner" class="hidden" style="background:#e8f5ee;border:1px solid #0e7a3d;color:#0e7a3d;border-radius:8px;padding:10px 14px;font-size:0.85rem;margin-bottom:14px"></div>' +
       '<div class="field"><label>Organisation name</label><input name="orgName" required minlength="2" placeholder="e.g. ABC Pvt. Ltd."></div>' +
       '<div class="field"><label>Number of employees</label><input type="number" name="headcount" min="1" max="1000000" required placeholder="e.g. 120"><div class="hint" id="reg-price-hint">Pricing scales with headcount — no hidden charges.</div></div>' +
       '<div class="field"><label>Your name (HR admin)</label><input name="adminName" required minlength="2"></div>' +
@@ -181,12 +182,41 @@
     const regEmp = authModal.querySelector('#auth-register [name="headcount"]');
     regEmp.addEventListener("input", function () {
       const n = parseInt(regEmp.value, 10) || 0;
+      if (PC.sponsoredCode) return; // payment waived — keep the sponsor notice
       if (n > 0 && PC.rateFor) {
         document.getElementById("reg-price-hint").textContent =
           "₹" + PC.rateFor(n) + " per employee × " + n.toLocaleString("en-IN") +
           " = " + PC.inr(PC.rateFor(n) * n) + " for the full cycle.";
       }
     });
+
+    // Sponsored access: a super-admin link carries ?invite=CODE. Validate it
+    // up front so the organisation sees the payment waiver before filling the
+    // form — and never gets told "free" by a link that has already expired.
+    (function applySponsoredInvite() {
+      var code = new URLSearchParams(window.location.search).get("invite");
+      if (!code) return;
+      var banner = document.getElementById("reg-sponsor-banner");
+      var hint = document.getElementById("reg-price-hint");
+      PC.api("/public/org-invite/" + encodeURIComponent(code.trim()))
+        .then(function (r) {
+          if (!r || !r.valid) {
+            banner.style.background = "#fef2f2";
+            banner.style.borderColor = "#dc2626";
+            banner.style.color = "#dc2626";
+            banner.innerHTML = "This sponsored access link is not valid any more — registering here will follow the normal payment step.";
+            banner.classList.remove("hidden");
+            return;
+          }
+          PC.sponsoredCode = code.trim().toUpperCase();
+          banner.innerHTML = "✓ <strong>Sponsored access</strong> — payment inside the package." +
+            (r.label ? '<br><span class="small">' + PC.esc(r.label) + "</span>" : "");
+          banner.classList.remove("hidden");
+          if (hint) hint.textContent = "Payment inside the package — your seats activate as soon as you register.";
+          showTab("register");
+        })
+        .catch(function () { /* leave the normal paid flow in place */ });
+    })();
 
     wireForm("auth-login", "/auth/login", function (f) {
       return { email: f.email.value, password: f.password.value };
@@ -200,6 +230,7 @@
         password: f.password.value,
       };
       if (f.adminWhatsapp && f.adminWhatsapp.value.trim()) body.adminWhatsapp = f.adminWhatsapp.value.trim();
+      if (PC.sponsoredCode) body.inviteCode = PC.sponsoredCode;
       return body;
     });
     wireForm("auth-invite", "/auth/invite/accept", function (f) {
@@ -937,6 +968,13 @@
   });
 
   document.addEventListener("DOMContentLoaded", function () {
-    PC.me().then(renderSessionUi);
+    PC.me().then(function (user) {
+      renderSessionUi(user);
+      // Someone arriving on a sponsored link (?invite=CODE) should land on the
+      // registration form directly — that link is the whole invitation.
+      if (!user && new URLSearchParams(window.location.search).get("invite")) {
+        PC.openAuth("register");
+      }
+    });
   });
 })();

@@ -74,6 +74,35 @@
             <p class="small muted">Loading organisations...</p>
           </div>
 
+          <!-- Sponsored access links: register with payment inside the package -->
+          <div class="mt-3" style="border:1px solid var(--line); border-radius:8px; padding:16px;">
+            <h3 class="small" style="margin:0 0 6px; font-weight:700; color:var(--green-900);">&#127903; Sponsored access links</h3>
+            <p class="small muted" style="margin:0 0 12px">
+              Share one of these with an organisation and they register normally with
+              payment inside the package &mdash; seats activate the moment they sign up. Only
+              this panel can create them. Anyone holding the link can register without
+              paying, so send it directly to the organisation and revoke it once they are
+              set up.
+            </p>
+            <div class="flex" style="gap:8px; flex-wrap:wrap; align-items:flex-end">
+              <div class="field" style="flex:1; min-width:220px; margin:0">
+                <label class="small">Who is it for?</label>
+                <input type="text" id="sponsor-label" placeholder="e.g. NGO partner &mdash; Sept batch" autocomplete="off">
+              </div>
+              <div class="field" style="width:110px; margin:0">
+                <label class="small">Uses</label>
+                <input type="number" id="sponsor-max-uses" value="1" min="1" max="500">
+              </div>
+              <div class="field" style="width:130px; margin:0">
+                <label class="small">Expires (days)</label>
+                <input type="number" id="sponsor-expiry" placeholder="never" min="1" max="365">
+              </div>
+              <button class="btn btn-sm btn-orange" id="btn-create-sponsor">+ Generate link</button>
+            </div>
+            <div id="sponsor-msg" class="small mt-1"></div>
+            <div id="sponsor-list" class="mt-2"></div>
+          </div>
+
           <!-- Maintenance: rescore a certified attempt after an answer-key fix -->
           <div class="mt-3" style="border:1px solid var(--line); border-radius:8px; padding:16px;">
             <h3 class="small" style="margin:0 0 6px; font-weight:700; color:var(--green-900);">🛠 Rescore a certified attempt</h3>

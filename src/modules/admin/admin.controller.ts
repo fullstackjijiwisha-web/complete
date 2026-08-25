@@ -1,8 +1,10 @@
 import type { RequestHandler } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { Question } from '../questions/question.model';
 import { Organisation } from '../organisations/organisation.model';
 import { OrgWipeBackup } from '../organisations/orgWipeBackup.model';
+import { SponsoredInvite } from '../organisations/sponsoredInvite.model';
 import {
   previewOrganisationWipe,
   wipeAllOrganisations,
@@ -546,6 +548,89 @@ export const exportOrgEmployees: RequestHandler = async (req, res) => {
     .type('text/csv')
     .setHeader('Content-Disposition', `attachment; filename="${safeName}-employees.csv"`)
     .send(csv);
+};
+
+// ── Sponsored access links ───────────────────────────────────────────────
+// A shareable registration link that waives payment: the organisation follows
+// it, registers as normal, and lands with seats already active. Minting is
+// super-admin only — this is the single sanctioned bypass of the payment gate.
+
+function sponsoredLink(req: Parameters<RequestHandler>[0], code: string): string {
+  const origin = `${req.protocol}://${req.get('host')}`;
+  return `${origin}/?invite=${encodeURIComponent(code)}`;
+}
+
+function newSponsorCode(): string {
+  // Ambiguous characters (0/O, 1/I) left out — these get typed by hand.
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let body = '';
+  for (let i = 0; i < 10; i++) {
+    body += alphabet[crypto.randomInt(0, alphabet.length)];
+  }
+  return `PC-FREE-${body}`;
+}
+
+export const createSponsoredInvite: RequestHandler = async (req, res) => {
+  const { label, maxUses, expiresInDays } = req.body as {
+    label: string;
+    maxUses?: number;
+    expiresInDays?: number;
+  };
+  const code = newSponsorCode();
+  const invite = await SponsoredInvite.create({
+    code,
+    label,
+    maxUses: maxUses ?? 1,
+    uses: 0,
+    ...(expiresInDays ? { expiresAt: new Date(Date.now() + expiresInDays * 86_400_000) } : {}),
+    createdBy: new Types.ObjectId(authUser(req).id),
+  });
+  await logAudit('admin.sponsored_invite_created', 'SponsoredInvite', invite.id, authUser(req).id, {
+    code,
+    label,
+    maxUses: invite.maxUses,
+  });
+  res.status(201).json({
+    success: true,
+    data: { id: invite.id, code, label, maxUses: invite.maxUses, expiresAt: invite.expiresAt ?? null, url: sponsoredLink(req, code) },
+  });
+};
+
+export const listSponsoredInvites: RequestHandler = async (req, res) => {
+  const invites = await SponsoredInvite.find().sort({ createdAt: -1 }).limit(100);
+  const now = Date.now();
+  res.json({
+    success: true,
+    data: invites.map((i) => ({
+      id: i.id,
+      code: i.code,
+      label: i.label,
+      url: sponsoredLink(req, i.code),
+      maxUses: i.maxUses,
+      uses: i.uses,
+      remaining: Math.max(0, i.maxUses - i.uses),
+      expiresAt: i.expiresAt ?? null,
+      revoked: i.revoked,
+      expired: Boolean(i.expiresAt && i.expiresAt.getTime() <= now),
+      exhausted: i.uses >= i.maxUses,
+      createdAt: i.createdAt,
+      usedBy: i.usedBy.map((u) => ({ orgName: u.orgName, orgCode: u.orgCode, usedAt: u.usedAt })),
+    })),
+  });
+};
+
+export const revokeSponsoredInvite: RequestHandler = async (req, res) => {
+  const invite = await SponsoredInvite.findByIdAndUpdate(
+    req.params.id,
+    { $set: { revoked: true } },
+    { new: true },
+  );
+  if (!invite) throw ApiError.notFound();
+  await logAudit('admin.sponsored_invite_revoked', 'SponsoredInvite', invite.id, authUser(req).id, {
+    code: invite.code,
+    uses: invite.uses,
+  });
+  res.json({ success: true, data: { revoked: true, code: invite.code } });
 };
 
 // Super admin: remove ONE organisation permanently. Used when a client wants

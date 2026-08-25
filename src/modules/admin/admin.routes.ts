@@ -56,6 +56,21 @@ adminRoutes.post('/questions', validate(createQuestionSchema), controller.create
 adminRoutes.patch('/questions/:id', validate(questionBaseSchema.partial()), controller.updateQuestion);
 adminRoutes.delete('/questions/:id', controller.deleteQuestion);
 
+// Sponsored access links — the only sanctioned way to waive the payment gate.
+adminRoutes.post(
+  '/org-invites',
+  validate(
+    z.object({
+      label: z.string().min(2).max(120),
+      maxUses: z.coerce.number().int().min(1).max(500).optional(),
+      expiresInDays: z.coerce.number().int().min(1).max(365).optional(),
+    }),
+  ),
+  controller.createSponsoredInvite,
+);
+adminRoutes.get('/org-invites', controller.listSponsoredInvites);
+adminRoutes.delete('/org-invites/:id', controller.revokeSponsoredInvite);
+
 adminRoutes.get('/orgs', controller.listOrgs);
 // Roster + assessment-standing CSV of one organisation's enrolled employees.
 adminRoutes.get('/orgs/:id/employees/export', controller.exportOrgEmployees);

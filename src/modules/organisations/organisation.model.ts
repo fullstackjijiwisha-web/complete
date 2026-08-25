@@ -31,6 +31,9 @@ export interface IOrganisation {
   // Seats unlock after Razorpay payment (PRD F2). Enforced only when Razorpay
   // is configured so local development works without a gateway account.
   seatsActive: boolean;
+  // Set when seats were activated by a super-admin sponsored link instead of
+  // a payment — keeps free access auditable.
+  sponsoredBy?: string;
   employeeSeq: number;
   readiness: {
     score: number;
@@ -72,6 +75,7 @@ const organisationSchema = new Schema<IOrganisation>(
     reportingPeriod: { start: Date, end: Date },
     pricingTier: { type: String },
     seatsActive: { type: Boolean, default: false },
+    sponsoredBy: { type: String },
     employeeSeq: { type: Number, default: 0 },
     readiness: {
       score: { type: Number, default: 0 },

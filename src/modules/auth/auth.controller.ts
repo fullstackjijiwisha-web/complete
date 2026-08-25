@@ -30,11 +30,17 @@ function publicUser(user: IUser & { id?: string }, id: string) {
 }
 
 export const registerOrg: RequestHandler = async (req, res) => {
-  const { user, orgCode, tokens } = await authService.registerOrg(req.body);
+  const { user, orgCode, tokens, sponsored } = await authService.registerOrg(req.body);
   setRefreshCookie(res, tokens.refreshToken);
   res.status(201).json({
     success: true,
-    data: { user: publicUser(user, user.id), orgCode, accessToken: tokens.accessToken },
+    data: {
+      user: publicUser(user, user.id),
+      orgCode,
+      accessToken: tokens.accessToken,
+      // true when a sponsored link waived payment — seats are already active.
+      sponsored: Boolean(sponsored),
+    },
   });
 };
 

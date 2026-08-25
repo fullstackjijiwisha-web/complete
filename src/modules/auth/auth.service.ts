@@ -3,6 +3,11 @@ import crypto from 'crypto';
 import { User } from '../users/user.model';
 import type { IUser } from '../users/user.model';
 import { Organisation } from '../organisations/organisation.model';
+import {
+  SponsoredInvite,
+  claimSponsoredInvite,
+  releaseSponsoredInvite,
+} from '../organisations/sponsoredInvite.model';
 import type { IOrganisation, CompanySize } from '../organisations/organisation.model';
 import { Invite } from './invite.model';
 import { ApiError } from '../../utils/ApiError';
@@ -46,14 +51,33 @@ export async function registerOrg(input: {
   gst?: string;
   billingContact?: { name?: string; email?: string };
   headcount: number;
+  inviteCode?: string;
   adminName: string;
   email: string;
   adminMobile?: string;
   adminWhatsapp?: string;
   password: string;
-}): Promise<{ user: UserDoc; orgCode: string; tokens: TokenPair }> {
+}): Promise<{ user: UserDoc; orgCode: string; tokens: TokenPair; sponsored?: boolean }> {
   const existing = await User.findOne({ email: input.email.toLowerCase() });
   if (existing) throw ApiError.conflict('An account with this email already exists');
+
+  // Sponsored access: a super-admin link waives payment. The use is claimed
+  // atomically BEFORE anything is created, so a race cannot oversubscribe it;
+  // it is released again if the rest of registration fails. An invalid code
+  // fails loudly rather than quietly charging an organisation that was
+  // promised free access.
+  const inviteCode = input.inviteCode?.trim().toUpperCase();
+  let sponsored = false;
+  if (inviteCode) {
+    const claimed = await claimSponsoredInvite(inviteCode);
+    if (!claimed) {
+      throw ApiError.badRequest(
+        'This sponsored access link is invalid, expired, revoked or already fully used',
+        'INVITE_CODE_INVALID',
+      );
+    }
+    sponsored = true;
+  }
 
   // Random org codes collide rarely; retry a few times before giving up.
   let org: HydratedDocument<IOrganisation> | null = null;
@@ -69,12 +93,28 @@ export async function registerOrg(input: {
         gst: input.gst,
         billingContact: input.billingContact,
         headcount: input.headcount,
+        ...(sponsored ? { seatsActive: true, sponsoredBy: inviteCode } : {}),
       });
     } catch (err) {
       if ((err as { code?: number }).code !== 11000) throw err;
     }
   }
-  if (!org) throw new Error('Could not allocate a unique org code');
+  if (!org) {
+    if (inviteCode) await releaseSponsoredInvite(inviteCode);
+    throw new Error('Could not allocate a unique org code');
+  }
+
+  if (sponsored && inviteCode) {
+    // Record which organisation consumed the link, for the panel's usage list.
+    await SponsoredInvite.updateOne(
+      { code: inviteCode },
+      {
+        $push: {
+          usedBy: { orgId: org._id, orgName: org.name, orgCode: org.orgCode, usedAt: new Date() },
+        },
+      },
+    );
+  }
 
   const user = await User.create({
     email: input.email,
@@ -87,9 +127,12 @@ export async function registerOrg(input: {
     status: 'active',
   });
 
-  await logAudit('org.registered', 'Organisation', org.id, user.id, { orgCode: org.orgCode });
+  await logAudit('org.registered', 'Organisation', org.id, user.id, {
+    orgCode: org.orgCode,
+    ...(sponsored ? { sponsoredBy: inviteCode } : {}),
+  });
   const tokens = await issueTokens(user);
-  return { user, orgCode: org.orgCode, tokens };
+  return { user, orgCode: org.orgCode, tokens, sponsored };
 }
 
 export async function login(email: string, password: string): Promise<{ user: UserDoc; tokens: TokenPair }> {
