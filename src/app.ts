@@ -49,7 +49,13 @@ export function createApp(): Express {
             contentSecurityPolicy: {
               directives: {
                 'script-src': ["'self'", "'unsafe-inline'", 'https://checkout.razorpay.com'],
-                'frame-src': ['https://api.razorpay.com', 'https://checkout.razorpay.com'],
+                // The landing page embeds the Sentinel product live (one iframe
+                // per screen), so its origin has to be an allowed frame source.
+                'frame-src': [
+                  'https://api.razorpay.com',
+                  'https://checkout.razorpay.com',
+                  'https://posh-dashboard-kappa.vercel.app',
+                ],
                 'connect-src': ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'],
                 'img-src': ["'self'", 'data:', 'https:'],
               },

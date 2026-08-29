@@ -1169,3 +1169,196 @@ details.data-view .data-table { min-width: 0; }
   body.print-cert-mode #print-cert-root.cert-bulk .jiji-cert-wrap { height: 100%; }
   body.print-cert-mode #print-cert-root.cert-bulk .jiji-cert { aspect-ratio: auto; height: 100%; }
 }
+
+
+/* ================= Sentinel band + live product rail =================
+   The band closes the hero; the rail below it embeds the Sentinel app one
+   iframe per screen. Frames are mounted only as they approach the viewport
+   (see js/sentinel-rail.js) — fifty simultaneous cross-origin apps would
+   stall the page. The "smoke" layer is what carries POSH Compass into
+   Sentinel: three slow drifting plumes over a dark gradient. */
+.sentinel-band {
+  background: linear-gradient(180deg, var(--green-950, #061a11) 0%, #08221a 100%);
+  padding: 6px 0 30px;
+}
+.sentinel-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 auto;
+  max-width: 1000px;
+  padding: 16px 26px;
+  border: 1px solid rgba(126, 227, 167, 0.42);
+  border-radius: 14px;
+  background: rgba(10, 46, 32, 0.55);
+  /* Bolder than the surrounding lede: heavier weight, larger, brighter. */
+  font-size: clamp(1.02rem, 1.05vw + 0.72rem, 1.32rem);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #f2fbf5;
+  text-align: center;
+  line-height: 1.5;
+}
+.sentinel-shield { display: inline-flex; flex: 0 0 auto; }
+.sentinel-word {
+  color: #7ee3a7;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.sentinel-rail-section {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 54px 0 46px;
+  background:
+    radial-gradient(120% 90% at 50% -10%, #0d3325 0%, #08221a 46%, #061a11 100%);
+}
+/* Smoky hand-off from the POSH Compass hero into the rail. */
+.sentinel-rail-section::before {
+  content: "";
+  position: absolute;
+  inset: -40% -10% auto -10%;
+  height: 70%;
+  background: radial-gradient(60% 60% at 50% 0%, rgba(232, 114, 12, 0.20), transparent 70%);
+  filter: blur(46px);
+  pointer-events: none;
+  z-index: -1;
+}
+.smoke { position: absolute; inset: 0; pointer-events: none; z-index: -1; overflow: hidden; }
+.smoke span {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(64px);
+  opacity: 0.5;
+  will-change: transform;
+}
+.smoke span:nth-child(1) {
+  width: 46vw; height: 46vw; left: -8vw; top: -14vw;
+  background: rgba(30, 122, 78, 0.55);
+  animation: smoke-drift-a 34s ease-in-out infinite alternate;
+}
+.smoke span:nth-child(2) {
+  width: 38vw; height: 38vw; right: -6vw; top: 4vw;
+  background: rgba(232, 114, 12, 0.20);
+  animation: smoke-drift-b 44s ease-in-out infinite alternate;
+}
+.smoke span:nth-child(3) {
+  width: 52vw; height: 52vw; left: 26vw; bottom: -26vw;
+  background: rgba(13, 51, 37, 0.85);
+  animation: smoke-drift-c 52s ease-in-out infinite alternate;
+}
+@keyframes smoke-drift-a { to { transform: translate3d(7vw, 4vw, 0) scale(1.14); } }
+@keyframes smoke-drift-b { to { transform: translate3d(-9vw, 6vw, 0) scale(1.2); } }
+@keyframes smoke-drift-c { to { transform: translate3d(4vw, -7vw, 0) scale(1.1); } }
+@media (prefers-reduced-motion: reduce) {
+  .smoke span { animation: none; }
+}
+
+.rail-head { text-align: center; margin-bottom: 22px; }
+.rail-lede { color: #cfe3d8; margin-left: auto; margin-right: auto; }
+.rail-lede strong { color: #fff; }
+
+.rail-viewport { position: relative; }
+.rail {
+  display: flex;
+  gap: 18px;
+  padding: 6px 40px 22px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.28) transparent;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  cursor: grab;
+}
+.rail.dragging { cursor: grabbing; scroll-behavior: auto; scroll-snap-type: none; }
+.rail::-webkit-scrollbar { height: 8px; }
+.rail::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.24); border-radius: 99px; }
+.rail::-webkit-scrollbar-track { background: transparent; }
+.rail:focus-visible { outline: 2px solid #e8720c; outline-offset: 4px; }
+
+.rail-card {
+  flex: 0 0 auto;
+  width: 400px;
+  scroll-snap-align: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.35s, box-shadow 0.35s;
+}
+.rail-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(232, 114, 12, 0.65);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+}
+.rc-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.22);
+}
+.rc-role {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+  color: #0a2e20; background: #7ee3a7; border-radius: 99px; padding: 3px 9px; white-space: nowrap;
+}
+.rc-screen { font-size: 0.86rem; font-weight: 600; color: #eaf4ee; }
+
+/* The frame is rendered at desktop width and scaled down, so each card shows
+   the real layout rather than the app's mobile breakpoint. */
+.rc-frame { position: relative; height: 250px; overflow: hidden; background: #0f172a; }
+.rc-frame iframe {
+  position: absolute; top: 0; left: 0;
+  width: 1280px; height: 800px;
+  transform: scale(0.3125);
+  transform-origin: 0 0;
+  border: 0;
+  /* Cards are a preview; clicks belong to the rail, not the embedded app. */
+  pointer-events: none;
+}
+.rc-skeleton {
+  position: absolute; inset: 0;
+  background: linear-gradient(100deg, #0f172a 30%, #1c2a44 50%, #0f172a 70%) 0 0 / 220% 100%;
+  animation: rc-shimmer 1.5s linear infinite;
+}
+@keyframes rc-shimmer { to { background-position: -220% 0; } }
+.rc-open {
+  padding: 9px 14px; font-size: 0.8rem; font-weight: 700; color: #7ee3a7;
+  text-decoration: none; border-top: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.18);
+}
+.rc-open:hover { color: #fff; background: rgba(232,114,12,0.24); }
+
+.rail-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+  width: 42px; height: 42px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.24);
+  background: rgba(6, 26, 17, 0.82);
+  color: #fff; font-size: 1.5rem; line-height: 1; cursor: pointer;
+  display: grid; place-items: center;
+  transition: background 0.2s, opacity 0.2s;
+}
+.rail-nav:hover { background: #e8720c; border-color: #e8720c; }
+.rail-nav[disabled] { opacity: 0.25; cursor: default; }
+.rail-nav.prev { left: 8px; }
+.rail-nav.next { right: 8px; }
+
+.rail-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-top: 6px;
+}
+.rail-hint { font-size: 0.82rem; color: #9fb8ab; }
+
+@media (max-width: 700px) {
+  .rail-card { width: 300px; }
+  .rc-frame { height: 188px; }
+  .rc-frame iframe { transform: scale(0.234); }
+  .rail-nav { display: none; }
+}
