@@ -1181,32 +1181,57 @@ details.data-view .data-table { min-width: 0; }
   background: linear-gradient(180deg, var(--green-950, #061a11) 0%, #08221a 100%);
   padding: 6px 0 30px;
 }
-.sentinel-line {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
+
+/* The line runs as a marquee: one long track of repeated copies sliding left
+   forever. Two identical groups sit side by side and the track travels exactly
+   one group's width, so the second group arrives where the first started and
+   the loop has no visible seam. */
+.sentinel-marquee {
+  overflow: hidden;
   margin: 0 auto;
-  max-width: 1000px;
-  padding: 16px 26px;
-  border: 1px solid rgba(126, 227, 167, 0.42);
-  border-radius: 14px;
+  max-width: 1180px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(126, 227, 167, 0.42);
+  border-bottom: 1px solid rgba(126, 227, 167, 0.42);
   background: rgba(10, 46, 32, 0.55);
+  /* Copy emerges and leaves through a fade rather than a hard edge. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+.sm-track {
+  display: flex;
+  width: max-content;
+  animation: sm-scroll 38s linear infinite;
+  will-change: transform;
+}
+.sentinel-marquee:hover .sm-track { animation-play-state: paused; }
+.sm-group { display: flex; flex: 0 0 auto; }
+.sm-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 34px;
+  white-space: nowrap;
   /* Bolder than the surrounding lede: heavier weight, larger, brighter. */
   font-size: clamp(1.02rem, 1.05vw + 0.72rem, 1.32rem);
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #f2fbf5;
-  text-align: center;
   line-height: 1.5;
 }
-.sentinel-shield { display: inline-flex; flex: 0 0 auto; }
-.sentinel-word {
-  color: #7ee3a7;
-  font-weight: 800;
-  white-space: nowrap;
+.sm-sep {
+  width: 7px; height: 7px; margin-left: 34px;
+  background: #e8720c;
+  transform: rotate(45deg);
+  flex: 0 0 auto;
 }
+@keyframes sm-scroll { to { transform: translate3d(-50%, 0, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .sm-track { animation: none; }
+}
+
+.sentinel-shield { display: inline-flex; flex: 0 0 auto; }
+.sentinel-word { color: #7ee3a7; font-weight: 800; white-space: nowrap; }
 
 .sentinel-rail-section {
   position: relative;
