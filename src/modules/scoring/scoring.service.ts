@@ -194,6 +194,8 @@ export function fibBlankMatches(acceptedAnswers: string[], given: string): boole
   if (keys.includes(answer)) return true;
 
   const words = answerWords(given);
+  // Every word appearing anywhere in the answer key, for the short-key rule.
+  const keyWords = new Set(acceptedAnswers.flatMap(answerWords));
 
   for (const key of keys) {
     if (/^\d+$/.test(key)) {
@@ -205,11 +207,12 @@ export function fibBlankMatches(acceptedAnswers: string[], given: string): boole
       continue;
     }
 
-    // A short key such as "IC" is safe to match as a whole word - "IC (Internal
-    // Committee)" - but not by containment or typo, where two letters are far
-    // too little to go on.
+    // A short key such as "IC" is matched as a whole word only when everything
+    // else in the answer also comes from the answer key - "IC (Internal
+    // Committee)" is a restatement, while "no idea" for a blank answered "no"
+    // is not. Two letters are far too little to allow containment or a typo.
     if (key.length < 5) {
-      if (words.includes(key)) return true;
+      if (words.includes(key) && words.every((w) => keyWords.has(w))) return true;
       continue;
     }
 
