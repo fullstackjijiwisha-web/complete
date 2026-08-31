@@ -188,3 +188,12 @@ adminRoutes.get('/orgs/:id/certificate', controller.downloadOrgCertificate);
 
 // Download an evidence document uploaded by an organisation (by org id + doc index)
 adminRoutes.get('/orgs/:id/documents/:docIndex', controller.downloadOrgAuditDocument);
+
+// Answer review queue — the manual half of grading: wordings the rules could
+// not match, judged once and then matched for free (and back-applied).
+adminRoutes.get('/unmatched-answers', controller.listUnmatchedAnswers);
+adminRoutes.post(
+  '/unmatched-answers/:id/decide',
+  validate(z.object({ accept: z.boolean() })),
+  controller.decideUnmatchedAnswer,
+);

@@ -48,6 +48,7 @@
         <button class="admin-tab-btn" data-tab="tests">📊 Tests Taken</button>
         <button class="admin-tab-btn" data-tab="orgs">🏢 Organisations</button>
         <button class="admin-tab-btn" data-tab="feedback">💬 Feedbacks</button>
+        <button class="admin-tab-btn" data-tab="grading">✍ Answer Review</button>
         <button class="admin-tab-btn" data-tab="email">✉ Email health</button>
       </div>
 
@@ -163,6 +164,33 @@
             auto-submitted when the timer expired.
           </p>
           <div id="tests-container">
+            <p class="small muted">Loading…</p>
+          </div>
+        </div>
+
+        <!-- Tab: Answer review queue -->
+        <div id="tab-grading" class="card hidden">
+          <div class="card-header-flex">
+            <h2 class="h-md" style="margin:0">Answer Review</h2>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="grading-status" class="input input-sm" style="width:auto">
+                <option value="pending">Waiting for a decision</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+                <option value="all">Everything</option>
+              </select>
+              <button class="btn btn-ghost btn-sm" id="btn-refresh-grading">↻ Refresh</button>
+            </div>
+          </div>
+          <p class="small muted" style="margin:0 0 14px">
+            Fill-in-the-blank answers the answer key did not match. Capitals, spacing,
+            hyphens, extra words, numbers written as words, Roman numerals, Hindi numbers
+            and single-letter typos are already handled automatically and never appear here —
+            what is left is a wording only a person can judge.
+            <strong>Accepting adds it to the answer key and re-marks the attempts it had
+            already cost marks in</strong>, so nobody stays marked wrong for it.
+          </p>
+          <div id="grading-container">
             <p class="small muted">Loading…</p>
           </div>
         </div>

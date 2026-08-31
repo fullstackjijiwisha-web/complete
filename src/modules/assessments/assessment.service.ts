@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import type { UpdateQuery } from 'mongoose';
 import type { HydratedDocument } from 'mongoose';
 import crypto from 'crypto';
 import { AssessmentAttempt } from './attempt.model';
@@ -9,7 +10,9 @@ import { User } from '../users/user.model';
 import { Organisation } from '../organisations/organisation.model';
 import { Certificate } from '../certificates/certificate.model';
 import { issueCertificate } from '../certificates/certificate.service';
-import { scoreAttempt } from '../scoring/scoring.service';
+import { scoreAttempt, canonicalAnswer, fibBlankMatches } from '../scoring/scoring.service';
+import { UnmatchedAnswer } from '../scoring/unmatchedAnswer.model';
+import type { IUnmatchedAnswer } from '../scoring/unmatchedAnswer.model';
 import { recomputeReadiness } from '../scoring/readiness.service';
 import { ApiError } from '../../utils/ApiError';
 import { currentCycle } from '../../utils/ids';
@@ -254,9 +257,70 @@ export interface SubmitResult {
 // Scores from stored answers + question versions only — client-sent scores
 // are never trusted (PRD §10.2). Safe to call for manual submit, timeout
 // auto-submit, and the stale-attempt cron sweep.
+/**
+ * Records fill-in-the-blank answers that survived every matching rule, so an
+ * administrator can decide on them once rather than trying to predict spellings
+ * in advance. Accepting one writes it into the question's accepted answers, and
+ * it is matched for free from then on.
+ *
+ * Best-effort by design: this is bookkeeping for a review screen, and failing to
+ * write it must never affect a learner's score or block their submission.
+ */
+async function recordUnmatchedBlanks(
+  attempt: AttemptDoc,
+  questions: Map<string, IQuestion>,
+): Promise<void> {
+  const answersById = new Map(attempt.answers.map((a) => [a.questionId.toString(), a.response]));
+  const ops: Parameters<typeof UnmatchedAnswer.bulkWrite>[0] = [];
+
+  for (const entry of attempt.paper) {
+    if (entry.type !== 'fib') continue;
+    const qid = entry.questionId.toString();
+    const question = questions.get(qid);
+    const response = answersById.get(qid);
+    if (!question || !Array.isArray(response)) continue;
+
+    (question.blanks ?? []).forEach((blank, i) => {
+      const given = response[i];
+      if (typeof given !== 'string') return;
+      const raw = given.trim();
+      // Blank and joke-length answers are not spelling problems; they would
+      // only bury the real entries.
+      if (raw.length < 2 || raw.length > 120) return;
+      if (fibBlankMatches(blank.acceptedAnswers, raw)) return; // already correct
+      const canonical = canonicalAnswer(raw);
+      if (!canonical) return;
+
+      const id = crypto
+        .createHash('sha256')
+        .update([qid, String(i), canonical].join(' '))
+        .digest('hex');
+      ops.push({
+        updateOne: {
+          filter: { _id: id },
+          // Cast: Mongoose's typed PushOperator has no room for $slice, which
+          // is what caps the stored samples at a dozen.
+          update: {
+            $setOnInsert: { questionId: entry.questionId, blankIndex: i, canonical, status: 'pending' },
+            $inc: { count: 1 },
+            $push: { samples: { $each: [raw], $slice: 12 } },
+          } as unknown as UpdateQuery<IUnmatchedAnswer>,
+          upsert: true,
+        },
+      });
+    });
+  }
+
+  if (!ops.length) return;
+  await UnmatchedAnswer.bulkWrite(ops, { ordered: false }).catch((err) =>
+    logger.error('Unmatched-answer record failed', { message: (err as Error).message }),
+  );
+}
+
 export async function finalizeAttempt(attempt: AttemptDoc): Promise<SubmitResult> {
   const questions = await loadPaperQuestions(attempt);
   const result = scoreAttempt(attempt, questions);
+  await recordUnmatchedBlanks(attempt, questions);
 
   attempt.status = 'scored';
   attempt.submittedAt = attempt.submittedAt ?? new Date();
@@ -320,4 +384,76 @@ export async function finalizeAttempt(attempt: AttemptDoc): Promise<SubmitResult
     },
     performanceLevel: performanceLevel(result.total),
   };
+}
+
+/**
+ * Re-marks the attempts that were graded wrong because of a spelling an
+ * administrator has now accepted.
+ *
+ * Scoped as tightly as possible: only scored attempts whose paper contains this
+ * question, and of those only the ones whose answer for this blank is the very
+ * wording that was accepted. A score can only go up here — the accepted answer
+ * set only ever grows — so this can never take a mark, or a certificate, away
+ * from anyone.
+ */
+export async function rescoreAttemptsForQuestion(
+  questionId: Types.ObjectId,
+  blankIndex: number,
+  canonical: string,
+): Promise<{ attemptsRescored: number; certificatesIssued: number }> {
+  const attempts = await AssessmentAttempt.find({
+    status: 'scored',
+    'paper.questionId': questionId,
+  });
+
+  let attemptsRescored = 0;
+  let certificatesIssued = 0;
+
+  for (const attempt of attempts) {
+    const answer = attempt.answers.find((a) => a.questionId.toString() === questionId.toString());
+    const response = answer?.response;
+    if (!Array.isArray(response)) continue;
+    const given = response[blankIndex];
+    if (typeof given !== 'string' || canonicalAnswer(given) !== canonical) continue;
+
+    const questions = await loadPaperQuestions(attempt);
+    const result = scoreAttempt(attempt, questions);
+    if (result.total <= (attempt.score ?? 0)) continue;
+
+    const previous = attempt.score ?? 0;
+    attempt.score = result.total;
+    attempt.sectionScores = result.sectionScores;
+    await attempt.save();
+    attemptsRescored += 1;
+
+    await logAudit('attempt.rescored', 'AssessmentAttempt', attempt.id, attempt.userId.toString(), {
+      previousScore: previous,
+      score: result.total,
+      reason: 'accepted spelling variant',
+    });
+
+    if (result.total < env.CERT_PASS_THRESHOLD) continue;
+
+    const existing = await Certificate.findOne({
+      userId: attempt.userId,
+      cycle: attempt.cycle,
+      revoked: false,
+    });
+    if (!existing) {
+      await issueCertificate(attempt, result.total);
+      certificatesIssued += 1;
+      await User.updateOne(
+        { _id: attempt.userId },
+        { $set: { retrainingFlagged: false } },
+      );
+    } else if (result.total > existing.score) {
+      existing.score = result.total;
+      existing.scoreBand = scoreBand(result.total);
+      existing.evidenceRef = attempt._id;
+      await existing.save();
+    }
+    await recomputeReadiness(attempt.orgId.toString());
+  }
+
+  return { attemptsRescored, certificatesIssued };
 }

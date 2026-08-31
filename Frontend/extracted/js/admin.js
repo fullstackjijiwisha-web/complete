@@ -59,6 +59,8 @@
     document.getElementById("btn-create-sponsor").addEventListener("click", createSponsorLink);
     document.getElementById("btn-refresh-feedback").addEventListener("click", loadFeedback);
     document.getElementById("btn-refresh-email").addEventListener("click", loadEmailHealth);
+    document.getElementById("btn-refresh-grading").addEventListener("click", loadGradingQueue);
+    document.getElementById("grading-status").addEventListener("change", loadGradingQueue);
     document.getElementById("btn-refresh-tests").addEventListener("click", loadTestStats);
 
     // Wire up the org danger-zone wipe modal
@@ -98,14 +100,94 @@
 
   function switchTab(tab) {
     currentTab = tab;
-    ["questions", "tests", "orgs", "feedback", "email"].forEach(t => {
+    ["questions", "tests", "orgs", "feedback", "grading", "email"].forEach(t => {
       document.getElementById("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "questions") loadQuestions();
     if (tab === "tests") loadTestStats();
     if (tab === "orgs") { loadOrgs(); loadSponsorLinks(); }
     if (tab === "feedback") loadFeedback();
+    if (tab === "grading") loadGradingQueue();
     if (tab === "email") loadEmailHealth();
+  }
+
+  /* ---------------- Answer Review Tab ----------------
+     Wordings the matcher could not place. One decision per wording clears it
+     for everyone who wrote the same thing, past attempts included. */
+  async function loadGradingQueue() {
+    const box = document.getElementById("grading-container");
+    const status = document.getElementById("grading-status").value;
+    box.innerHTML = '<p class="small muted">Loading…</p>';
+    let data;
+    try {
+      data = await PC.api("/admin/unmatched-answers?status=" + encodeURIComponent(status));
+    } catch (e) {
+      box.innerHTML = '<p class="small" style="color:#dc2626">' + PC.esc(e.message) + "</p>";
+      return;
+    }
+    if (!data.rows.length) {
+      box.innerHTML = status === "pending"
+        ? '<p class="small muted">Nothing waiting. Every answer so far was either matched by the rules or already decided here.</p>'
+        : '<p class="small muted">Nothing to show.</p>';
+      return;
+    }
+
+    box.innerHTML = data.rows.map(function (r) {
+      const pending = r.status === "pending";
+      const badge = pending
+        ? '<span class="badge badge-neutral">' + r.count + (r.count === 1 ? " employee" : " employees") + "</span>"
+        : '<span class="badge badge-' + (r.status === "accepted" ? "success" : "neutral") + '">' + PC.esc(r.status) + "</span>";
+      return '<div class="fbadmin-item" data-queue-id="' + PC.esc(r.id) + '">' +
+        '<div class="fbadmin-meta"><strong>Blank ' + (r.blankIndex + 1) + "</strong>" + badge + "</div>" +
+        '<p class="small" style="margin:6px 0">' + PC.esc(r.question) + "</p>" +
+        '<p class="small muted" style="margin:0 0 4px">Answer key: ' +
+          (r.expected.length ? PC.esc(r.expected.join(" · ")) : "—") + "</p>" +
+        '<p class="small" style="margin:0 0 10px">They wrote: <strong>' +
+          PC.esc(r.samples.join("</strong>, <strong>")) + "</strong></p>" +
+        (pending
+          ? '<div style="display:flex;gap:8px">' +
+            '<button class="btn btn-primary btn-sm" data-decide="accept">Correct — accept it</button>' +
+            '<button class="btn btn-ghost btn-sm" data-decide="reject">Not correct</button>' +
+            "</div>"
+          : "") +
+        "</div>";
+    }).join("");
+
+    box.querySelectorAll("[data-decide]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const row = btn.closest("[data-queue-id]");
+        const accept = btn.dataset.decide === "accept";
+        if (accept) {
+          const ok = await PC.confirmModal(
+            "Accept this wording?",
+            "It will be added to the answer key, and every attempt already marked wrong for it will be re-marked. Scores can only go up, never down.",
+            "Accept",
+          );
+          if (!ok) return;
+        }
+        row.querySelectorAll("button").forEach(b => (b.disabled = true));
+        try {
+          const res = await PC.api("/admin/unmatched-answers/" + row.dataset.queueId + "/decide", {
+            method: "POST",
+            body: { accept: accept },
+          });
+          if (accept) {
+            PC.alertModal(
+              "Added to the answer key",
+              res.attemptsRescored
+                ? res.attemptsRescored + " attempt(s) re-marked" +
+                  (res.certificatesIssued
+                    ? ", and " + res.certificatesIssued + " certificate(s) issued as a result."
+                    : ".")
+                : "No past attempt needed re-marking — it will be accepted from now on.",
+            );
+          }
+        } catch (e) {
+          PC.alertModal("Could not save that decision", PC.esc(e.message));
+        }
+        loadGradingQueue();
+      });
+    });
   }
 
   /* ---------------- Tests Taken Tab ---------------- */

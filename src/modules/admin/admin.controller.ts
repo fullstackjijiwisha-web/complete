@@ -18,6 +18,7 @@ import { checkEmailHealth } from '../../services/email.service';
 import { Audit, AuditSlot } from '../audits/audit.model';
 import { AuditLog, logAudit } from '../auditlog/auditLog.model';
 import { PublicStats } from '../stats/publicStats.model';
+import { listUnmatched, decideUnmatched } from '../scoring/reviewQueue.service';
 import { Certificate } from '../certificates/certificate.model';
 import { AssessmentAttempt } from '../assessments/attempt.model';
 import { loadPaperQuestions } from '../assessments/assessment.service';
@@ -942,4 +943,27 @@ export const downloadOrgAuditDocument: RequestHandler = async (req, res) => {
   res.setHeader('Content-Type', contentType);
   res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
   res.send(fileBuffer);
+};
+
+// ── Answer review queue ──────────────────────────────────────────────────
+// Fill-in-the-blank answers no rule could match. An administrator judges each
+// wording once; accepting one adds it to the answer key AND re-marks the
+// attempts it had cost marks in.
+
+export const listUnmatchedAnswers: RequestHandler = async (req, res) => {
+  const status = (req.query.status as string) ?? 'pending';
+  const rows = await listUnmatched(
+    status === 'all' || status === 'accepted' || status === 'rejected' ? status : 'pending',
+    Math.min(Number(req.query.limit) || 200, 500),
+  );
+  res.json({ success: true, data: { rows, pendingShown: rows.length } });
+};
+
+export const decideUnmatchedAnswer: RequestHandler = async (req, res) => {
+  const result = await decideUnmatched(
+    req.params.id as string,
+    (req.body as { accept: boolean }).accept,
+    authUser(req).id,
+  );
+  res.json({ success: true, data: result });
 };
