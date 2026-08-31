@@ -48,7 +48,7 @@
         <button class="admin-tab-btn" data-tab="tests">📊 Tests Taken</button>
         <button class="admin-tab-btn" data-tab="orgs">🏢 Organisations</button>
         <button class="admin-tab-btn" data-tab="feedback">💬 Feedbacks</button>
-        <button class="admin-tab-btn" data-tab="grading">✍ Answer Review</button>
+        <button class="admin-tab-btn" data-tab="answerkeys">🔑 Answer Keys</button>
         <button class="admin-tab-btn" data-tab="email">✉ Email health</button>
       </div>
 
@@ -168,40 +168,18 @@
           </div>
         </div>
 
-        <!-- Tab: Answer review queue -->
-        <div id="tab-grading" class="card hidden">
+        <!-- Tab: Answer keys -->
+        <div id="tab-answerkeys" class="card hidden">
           <div class="card-header-flex">
-            <h2 class="h-md" style="margin:0">Answer Review</h2>
-            <div style="display:flex;gap:8px;align-items:center">
-              <button class="btn btn-ghost btn-sm grading-view-btn active" data-view="queue">Waiting for a decision</button>
-              <button class="btn btn-ghost btn-sm grading-view-btn" data-view="keys">Accepted answers</button>
-              <select id="grading-status" class="input input-sm" style="width:auto">
-                <option value="pending">Waiting for a decision</option>
-                <option value="accepted">Accepted</option>
-                <option value="rejected">Rejected</option>
-                <option value="all">Everything</option>
-              </select>
-              <button class="btn btn-ghost btn-sm" id="btn-refresh-grading">↻ Refresh</button>
-            </div>
+            <h2 class="h-md" style="margin:0">Answer Keys</h2>
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-answerkeys">↻ Refresh</button>
           </div>
-          <p class="small muted" style="margin:0 0 14px">
-            Fill-in-the-blank answers the answer key did not match. Capitals, spacing,
-            hyphens, extra words, numbers written as words, Roman numerals, Hindi numbers
-            and single-letter typos are already handled automatically and never appear here —
-            what is left is a wording only a person can judge.
-            <strong>Accepting adds it to the answer key and re-marks the attempts it had
-            already cost marks in</strong>, so nobody stays marked wrong for it.
-          </p>
-          <div id="grading-container">
-            <p class="small muted">Loading…</p>
-          </div>
-
-          <div id="answerkey-intro" class="hidden">
+          <div id="answerkey-intro">
             <p class="small muted" style="margin:0 0 14px">
-              Every fill-in-the-blank question and what counts as correct for it. This is only
-              the list of spellings written down — capitals, spacing, hyphens, extra words,
-              numbers in any notation, Indian spellings and single-letter typos are matched
-              against these automatically and never need listing.
+              Every fill-in-the-blank question in the bank, with every spelling that counts as
+              correct for each blank. This is the list of spellings written down — capitals,
+              spacing, hyphens, extra words, numbers in any notation, Indian spellings and
+              single-letter typos are matched against these automatically and are not listed.
               <strong>Adding a spelling also re-marks the attempts it had already cost marks
               in.</strong>
             </p>

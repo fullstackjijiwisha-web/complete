@@ -59,11 +59,7 @@
     document.getElementById("btn-create-sponsor").addEventListener("click", createSponsorLink);
     document.getElementById("btn-refresh-feedback").addEventListener("click", loadFeedback);
     document.getElementById("btn-refresh-email").addEventListener("click", loadEmailHealth);
-    document.getElementById("btn-refresh-grading").addEventListener("click", refreshGradingView);
-    document.getElementById("grading-status").addEventListener("change", loadGradingQueue);
-    document.querySelectorAll(".grading-view-btn").forEach(function (b) {
-      b.addEventListener("click", function () { setGradingView(b.dataset.view); });
-    });
+    document.getElementById("btn-refresh-answerkeys").addEventListener("click", loadAnswerKeys);
     document.getElementById("btn-refresh-tests").addEventListener("click", loadTestStats);
 
     // Wire up the org danger-zone wipe modal
@@ -103,46 +99,29 @@
 
   function switchTab(tab) {
     currentTab = tab;
-    ["questions", "tests", "orgs", "feedback", "grading", "email"].forEach(t => {
+    ["questions", "tests", "orgs", "feedback", "answerkeys", "email"].forEach(t => {
       document.getElementById("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "questions") loadQuestions();
     if (tab === "tests") loadTestStats();
     if (tab === "orgs") { loadOrgs(); loadSponsorLinks(); }
     if (tab === "feedback") loadFeedback();
-    if (tab === "grading") refreshGradingView();
+    if (tab === "answerkeys") loadAnswerKeys();
     if (tab === "email") loadEmailHealth();
   }
 
-  /* ---------------- Answer key (what counts as correct) ----------------
-     The queue shows what is still undecided; this shows the decisions and the
-     original answer key together, per question. */
-  let gradingView = "queue";
+  /* ---------------- Answer Keys Tab ----------------
+     Every fill-in-the-blank question in the bank, with every spelling that
+     counts as correct for each of its blanks. Nothing is filtered out: the
+     whole answer key, in one place. */
   let answerKeyRows = [];
-
-  function setGradingView(view) {
-    gradingView = view;
-    document.querySelectorAll(".grading-view-btn").forEach(function (b) {
-      b.classList.toggle("active", b.dataset.view === view);
-    });
-    const queueView = view === "queue";
-    document.getElementById("grading-container").classList.toggle("hidden", !queueView);
-    document.getElementById("grading-status").classList.toggle("hidden", !queueView);
-    document.getElementById("answerkey-intro").classList.toggle("hidden", queueView);
-    refreshGradingView();
-  }
-
-  function refreshGradingView() {
-    if (gradingView === "queue") loadGradingQueue();
-    else loadAnswerKeys();
-  }
 
   async function loadAnswerKeys() {
     const box = document.getElementById("answerkey-container");
     box.innerHTML = '<p class="small muted">Loading…</p>';
     let data;
     try {
-      data = await PC.api("/admin/fib-answer-keys");
+      data = await PC.api("/admin/fib-answer-keys?includeInactive=true");
     } catch (e) {
       box.innerHTML = '<p class="small" style="color:#dc2626">' + PC.esc(e.message) + "</p>";
       return;
@@ -156,17 +135,13 @@
     const totalSpellings = data.rows.reduce(function (n, r) {
       return n + r.blanks.reduce(function (m, b) { return m + b.accepted.length; }, 0);
     }, 0);
-    const fromLearners = data.rows.reduce(function (n, r) {
-      return n + r.blanks.reduce(function (m, b) {
-        return m + b.accepted.filter(function (a) { return a.fromLearner; }).length;
-      }, 0);
-    }, 0);
+    const totalBlanks = data.rows.reduce(function (n, r) { return n + r.blanks.length; }, 0);
 
     let html =
       '<div class="fbadmin-stats">' +
       '<div class="fbadmin-tile"><div class="num">' + data.rows.length + '</div><div class="lbl">Fill-in-the-blank questions</div></div>' +
       '<div class="fbadmin-tile"><div class="num">' + totalSpellings + '</div><div class="lbl">Accepted spellings</div></div>' +
-      '<div class="fbadmin-tile"><div class="num">' + fromLearners + '</div><div class="lbl">Added from real answers</div></div>' +
+      '<div class="fbadmin-tile"><div class="num">' + totalBlanks + '</div><div class="lbl">Blanks</div></div>' +
       "</div>";
 
     html += data.rows.map(function (r, qi) {
@@ -178,7 +153,7 @@
         r.blanks.map(function (b) {
           return '<div style="margin:0 0 10px;padding-left:10px;border-left:2px solid var(--border)">' +
             '<p class="small muted" style="margin:0 0 6px">Blank ' + (b.blankIndex + 1) +
-              (b.pending ? ' · <strong>' + b.pending + ' waiting for a decision</strong>' : "") + "</p>" +
+              ' · ' + b.accepted.length + (b.accepted.length === 1 ? " key" : " keys") + "</p>" +
             '<div class="pill-row" style="margin:0 0 8px">' +
               b.accepted.map(function (a, ai) {
                 return '<span class="badge badge-' + (a.fromLearner ? "success" : "neutral") + '">' +
@@ -261,85 +236,6 @@
       PC.alertModal("Could not change the answer key", PC.esc(e.message));
     }
     loadAnswerKeys();
-  }
-
-  /* ---------------- Answer Review Tab ----------------
-     Wordings the matcher could not place. One decision per wording clears it
-     for everyone who wrote the same thing, past attempts included. */
-  async function loadGradingQueue() {
-    const box = document.getElementById("grading-container");
-    const status = document.getElementById("grading-status").value;
-    box.innerHTML = '<p class="small muted">Loading…</p>';
-    let data;
-    try {
-      data = await PC.api("/admin/unmatched-answers?status=" + encodeURIComponent(status));
-    } catch (e) {
-      box.innerHTML = '<p class="small" style="color:#dc2626">' + PC.esc(e.message) + "</p>";
-      return;
-    }
-    if (!data.rows.length) {
-      box.innerHTML = status === "pending"
-        ? '<p class="small muted">Nothing waiting. Every answer so far was either matched by the rules or already decided here.</p>'
-        : '<p class="small muted">Nothing to show.</p>';
-      return;
-    }
-
-    box.innerHTML = data.rows.map(function (r) {
-      const pending = r.status === "pending";
-      const badge = pending
-        ? '<span class="badge badge-neutral">' + r.count + (r.count === 1 ? " employee" : " employees") + "</span>"
-        : '<span class="badge badge-' + (r.status === "accepted" ? "success" : "neutral") + '">' + PC.esc(r.status) + "</span>";
-      return '<div class="fbadmin-item" data-queue-id="' + PC.esc(r.id) + '">' +
-        '<div class="fbadmin-meta"><strong>Blank ' + (r.blankIndex + 1) + "</strong>" + badge + "</div>" +
-        '<p class="small" style="margin:6px 0">' + PC.esc(r.question) + "</p>" +
-        '<p class="small muted" style="margin:0 0 4px">Answer key: ' +
-          (r.expected.length ? PC.esc(r.expected.join(" · ")) : "—") + "</p>" +
-        '<p class="small" style="margin:0 0 10px">They wrote: <strong>' +
-          PC.esc(r.samples.join("</strong>, <strong>")) + "</strong></p>" +
-        (pending
-          ? '<div style="display:flex;gap:8px">' +
-            '<button class="btn btn-primary btn-sm" data-decide="accept">Correct — accept it</button>' +
-            '<button class="btn btn-ghost btn-sm" data-decide="reject">Not correct</button>' +
-            "</div>"
-          : "") +
-        "</div>";
-    }).join("");
-
-    box.querySelectorAll("[data-decide]").forEach(function (btn) {
-      btn.addEventListener("click", async function () {
-        const row = btn.closest("[data-queue-id]");
-        const accept = btn.dataset.decide === "accept";
-        if (accept) {
-          const ok = await PC.confirmModal(
-            "Accept this wording?",
-            "It will be added to the answer key, and every attempt already marked wrong for it will be re-marked. Scores can only go up, never down.",
-            "Accept",
-          );
-          if (!ok) return;
-        }
-        row.querySelectorAll("button").forEach(b => (b.disabled = true));
-        try {
-          const res = await PC.api("/admin/unmatched-answers/" + row.dataset.queueId + "/decide", {
-            method: "POST",
-            body: { accept: accept },
-          });
-          if (accept) {
-            PC.alertModal(
-              "Added to the answer key",
-              res.attemptsRescored
-                ? res.attemptsRescored + " attempt(s) re-marked" +
-                  (res.certificatesIssued
-                    ? ", and " + res.certificatesIssued + " certificate(s) issued as a result."
-                    : ".")
-                : "No past attempt needed re-marking — it will be accepted from now on.",
-            );
-          }
-        } catch (e) {
-          PC.alertModal("Could not save that decision", PC.esc(e.message));
-        }
-        loadGradingQueue();
-      });
-    });
   }
 
   /* ---------------- Tests Taken Tab ---------------- */
