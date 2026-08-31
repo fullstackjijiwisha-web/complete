@@ -18,7 +18,13 @@ import { checkEmailHealth } from '../../services/email.service';
 import { Audit, AuditSlot } from '../audits/audit.model';
 import { AuditLog, logAudit } from '../auditlog/auditLog.model';
 import { PublicStats } from '../stats/publicStats.model';
-import { listUnmatched, decideUnmatched } from '../scoring/reviewQueue.service';
+import {
+  listUnmatched,
+  decideUnmatched,
+  listAnswerKeys,
+  addAcceptedAnswer,
+  removeAcceptedAnswer,
+} from '../scoring/reviewQueue.service';
 import { Certificate } from '../certificates/certificate.model';
 import { AssessmentAttempt } from '../assessments/attempt.model';
 import { loadPaperQuestions } from '../assessments/assessment.service';
@@ -963,6 +969,34 @@ export const decideUnmatchedAnswer: RequestHandler = async (req, res) => {
   const result = await decideUnmatched(
     req.params.id as string,
     (req.body as { accept: boolean }).accept,
+    authUser(req).id,
+  );
+  res.json({ success: true, data: result });
+};
+
+// The answer key itself: what counts as correct for each fill-in-the-blank.
+export const listFibAnswerKeys: RequestHandler = async (req, res) => {
+  const rows = await listAnswerKeys(req.query.includeInactive === 'true');
+  res.json({ success: true, data: { rows } });
+};
+
+export const addFibAnswer: RequestHandler = async (req, res) => {
+  const body = req.body as { blankIndex: number; spelling: string };
+  const result = await addAcceptedAnswer(
+    req.params.id as string,
+    body.blankIndex,
+    body.spelling,
+    authUser(req).id,
+  );
+  res.json({ success: true, data: result });
+};
+
+export const removeFibAnswer: RequestHandler = async (req, res) => {
+  const body = req.body as { blankIndex: number; spelling: string };
+  const result = await removeAcceptedAnswer(
+    req.params.id as string,
+    body.blankIndex,
+    body.spelling,
     authUser(req).id,
   );
   res.json({ success: true, data: result });

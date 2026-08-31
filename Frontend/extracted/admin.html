@@ -173,6 +173,8 @@
           <div class="card-header-flex">
             <h2 class="h-md" style="margin:0">Answer Review</h2>
             <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-ghost btn-sm grading-view-btn active" data-view="queue">Waiting for a decision</button>
+              <button class="btn btn-ghost btn-sm grading-view-btn" data-view="keys">Accepted answers</button>
               <select id="grading-status" class="input input-sm" style="width:auto">
                 <option value="pending">Waiting for a decision</option>
                 <option value="accepted">Accepted</option>
@@ -192,6 +194,18 @@
           </p>
           <div id="grading-container">
             <p class="small muted">Loading…</p>
+          </div>
+
+          <div id="answerkey-intro" class="hidden">
+            <p class="small muted" style="margin:0 0 14px">
+              Every fill-in-the-blank question and what counts as correct for it. This is only
+              the list of spellings written down — capitals, spacing, hyphens, extra words,
+              numbers in any notation, Indian spellings and single-letter typos are matched
+              against these automatically and never need listing.
+              <strong>Adding a spelling also re-marks the attempts it had already cost marks
+              in.</strong>
+            </p>
+            <div id="answerkey-container"><p class="small muted">Loading…</p></div>
           </div>
         </div>
 

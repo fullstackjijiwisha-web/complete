@@ -457,3 +457,30 @@ export async function rescoreAttemptsForQuestion(
 
   return { attemptsRescored, certificatesIssued };
 }
+
+/**
+ * How many scored attempts were marked correct by exactly this wording.
+ *
+ * Guards removal from the answer key: if anyone's score rests on a spelling,
+ * it cannot be quietly withdrawn.
+ */
+export async function countAttemptsMatchedBy(
+  questionId: Types.ObjectId,
+  blankIndex: number,
+  canonical: string,
+): Promise<number> {
+  const attempts = await AssessmentAttempt.find({
+    status: 'scored',
+    'paper.questionId': questionId,
+  }).select('answers');
+
+  let used = 0;
+  for (const attempt of attempts) {
+    const answer = attempt.answers.find((a) => a.questionId.toString() === questionId.toString());
+    const response = answer?.response;
+    if (!Array.isArray(response)) continue;
+    const given = response[blankIndex];
+    if (typeof given === 'string' && canonicalAnswer(given) === canonical) used += 1;
+  }
+  return used;
+}
