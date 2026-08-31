@@ -37,23 +37,6 @@ export interface IAnswer {
   savedAt: Date;
 }
 
-/**
- * One blank the AI grader accepted, recorded on the attempt itself.
- *
- * Stored rather than recomputed for the same reason the question content is
- * snapshotted: the answer review re-derives its verdicts, and if it asked the
- * model again it could get a different answer than the score was built from.
- * Persisting the decision makes the score and the review two readings of one
- * fact. It is also the audit trail for why a non-matching answer earned credit.
- */
-export interface IAiBlankVerdict {
-  questionId: Types.ObjectId;
-  blankIndex: number;
-  reason: string;
-  source: 'ai' | 'cache';
-  gradedAt: Date;
-}
-
 export interface IAssessmentAttempt {
   userId: Types.ObjectId;
   orgId: Types.ObjectId;
@@ -67,8 +50,6 @@ export interface IAssessmentAttempt {
   timeLimitMin: number;
   score?: number;
   sectionScores?: Record<string, number>;
-  // Absent on attempts scored before AI grading existed, or when it was off.
-  aiVerdicts?: IAiBlankVerdict[];
   attemptNo: number;
   createdAt: Date;
   updatedAt: Date;
@@ -102,15 +83,6 @@ const attemptSchema = new Schema<IAssessmentAttempt>(
     timeLimitMin: { type: Number, required: true },
     score: { type: Number },
     sectionScores: { type: Schema.Types.Mixed },
-    aiVerdicts: [
-      {
-        questionId: { type: Schema.Types.ObjectId, required: true },
-        blankIndex: { type: Number, required: true },
-        reason: { type: String, default: '' },
-        source: { type: String, enum: ['ai', 'cache'], default: 'ai' },
-        gradedAt: { type: Date, default: Date.now },
-      },
-    ],
     attemptNo: { type: Number, required: true },
   },
   { timestamps: true },

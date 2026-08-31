@@ -15,16 +15,6 @@ export interface QuestionResult {
   points: number; // 0..1
 }
 
-/**
- * Blanks the AI grader accepted, as questionId -> set of blank indexes.
- *
- * Scoring stays a pure, synchronous function: the AI call happens once, before
- * scoring, and its decisions are passed in as data. That keeps submit-time
- * scoring and the later answer review reading from the SAME decisions, so the
- * score and the review can never disagree.
- */
-export type AiAcceptedBlanks = ReadonlyMap<string, ReadonlySet<number>>;
-
 export interface AttemptScore {
   total: number; // 0..100, one decimal
   sectionScores: Record<string, number>;
@@ -39,16 +29,7 @@ export function normalizeAnswer(value: string): string {
 }
 
 // Every question yields points in [0,1]; unanswered scores 0.
-//
-// `aiAccepted` lists blank indexes the AI grader judged correct despite not
-// matching the answer key exactly. It can only ADD credit — a blank the exact
-// matcher already accepted never consults it — so a failure or absence of AI
-// grading can never cost a learner marks.
-export function scoreQuestion(
-  question: IQuestion,
-  response: unknown,
-  aiAccepted?: ReadonlySet<number>,
-): number {
+export function scoreQuestion(question: IQuestion, response: unknown): number {
   switch (question.type) {
     case 'mcq':
     case 'case_study': {
@@ -66,7 +47,6 @@ export function scoreQuestion(
         if (typeof given !== 'string') return;
         const accepted = blank.acceptedAnswers.map(normalizeAnswer);
         if (accepted.includes(normalizeAnswer(given))) correct += 1;
-        else if (aiAccepted?.has(i)) correct += 1;
       });
       return correct / blanks.length;
     }
@@ -93,7 +73,6 @@ export function scoreQuestion(
 export function scoreAttempt(
   attempt: Pick<IAssessmentAttempt, 'paper' | 'answers'>,
   questionsById: Map<string, IQuestion>,
-  aiAccepted?: AiAcceptedBlanks,
 ): AttemptScore {
   const answersById = new Map(attempt.answers.map((a) => [a.questionId.toString(), a.response]));
 
@@ -103,9 +82,7 @@ export function scoreAttempt(
   for (const entry of attempt.paper) {
     const qid = entry.questionId.toString();
     const question = questionsById.get(qid);
-    const points = question
-      ? scoreQuestion(question, answersById.get(qid), aiAccepted?.get(qid))
-      : 0;
+    const points = question ? scoreQuestion(question, answersById.get(qid)) : 0;
     perQuestion.push({ questionId: qid, type: entry.type, points });
     const section = sectionTotals.get(entry.type) ?? { sum: 0, count: 0 };
     section.sum += points;
