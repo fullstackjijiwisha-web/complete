@@ -9,7 +9,10 @@ import { User } from '../users/user.model';
 import { Organisation } from '../organisations/organisation.model';
 import { Certificate } from '../certificates/certificate.model';
 import { issueCertificate } from '../certificates/certificate.service';
-import { scoreAttempt } from '../scoring/scoring.service';
+import { scoreAttempt, normalizeAnswer } from '../scoring/scoring.service';
+import type { AiAcceptedBlanks } from '../scoring/scoring.service';
+import { gradeBlanks, aiGradingEnabled } from '../../services/aiGrader.service';
+import type { BlankToGrade } from '../../services/aiGrader.service';
 import { recomputeReadiness } from '../scoring/readiness.service';
 import { ApiError } from '../../utils/ApiError';
 import { currentCycle } from '../../utils/ids';
@@ -254,9 +257,80 @@ export interface SubmitResult {
 // Scores from stored answers + question versions only — client-sent scores
 // are never trusted (PRD §10.2). Safe to call for manual submit, timeout
 // auto-submit, and the stale-attempt cron sweep.
+/**
+ * Collects the fill-in-the-blank answers the exact matcher rejected.
+ *
+ * Only these reach the AI grader. Anything the answer key already accepts is
+ * settled for free and is never sent anywhere.
+ */
+function blanksNeedingAi(
+  attempt: AttemptDoc,
+  questions: Map<string, IQuestion>,
+): BlankToGrade[] {
+  const answersById = new Map(attempt.answers.map((a) => [a.questionId.toString(), a.response]));
+  const items: BlankToGrade[] = [];
+
+  for (const entry of attempt.paper) {
+    if (entry.type !== 'fib') continue;
+    const qid = entry.questionId.toString();
+    const question = questions.get(qid);
+    const response = answersById.get(qid);
+    if (!question || !Array.isArray(response)) continue;
+
+    (question.blanks ?? []).forEach((blank, i) => {
+      const given = response[i];
+      if (typeof given !== 'string' || !given.trim()) return;
+      const accepted = blank.acceptedAnswers.map(normalizeAnswer);
+      if (accepted.includes(normalizeAnswer(given))) return; // already correct
+      items.push({
+        questionId: qid,
+        blankIndex: i,
+        questionText: question.body,
+        acceptedAnswers: blank.acceptedAnswers,
+        learnerAnswer: given,
+      });
+    });
+  }
+  return items;
+}
+
+/** Rebuilds the scoring lookup from verdicts stored on the attempt. */
+export function aiAcceptedFromAttempt(attempt: Pick<IAssessmentAttempt, 'aiVerdicts'>): AiAcceptedBlanks {
+  const map = new Map<string, Set<number>>();
+  for (const v of attempt.aiVerdicts ?? []) {
+    const qid = v.questionId.toString();
+    const set = map.get(qid) ?? new Set<number>();
+    set.add(v.blankIndex);
+    map.set(qid, set);
+  }
+  return map;
+}
+
 export async function finalizeAttempt(attempt: AttemptDoc): Promise<SubmitResult> {
   const questions = await loadPaperQuestions(attempt);
-  const result = scoreAttempt(attempt, questions);
+
+  // Meaning-based second pass over the blanks the answer key rejected. It can
+  // only add credit, and every failure inside it is swallowed there, so an AI
+  // outage degrades this back to plain exact matching instead of failing the
+  // submission or lowering a score.
+  if (aiGradingEnabled()) {
+    const pending = blanksNeedingAi(attempt, questions);
+    if (pending.length) {
+      const verdicts = await gradeBlanks(pending);
+      if (verdicts.length) {
+        attempt.aiVerdicts = verdicts.map((v) => ({
+          questionId: new Types.ObjectId(v.questionId),
+          blankIndex: v.blankIndex,
+          reason: v.reason,
+          source: v.source,
+          gradedAt: new Date(),
+        }));
+        attempt.markModified('aiVerdicts');
+      }
+    }
+  }
+
+  const result = scoreAttempt(attempt, questions, aiAcceptedFromAttempt(attempt));
 
   attempt.status = 'scored';
   attempt.submittedAt = attempt.submittedAt ?? new Date();

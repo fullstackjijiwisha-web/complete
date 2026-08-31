@@ -1,7 +1,13 @@
 import type { RequestHandler } from 'express';
 import { Types } from 'mongoose';
 import { AssessmentAttempt } from './attempt.model';
-import { startAttempt, finalizeAttempt, sanitizedPaper, loadPaperQuestions } from './assessment.service';
+import {
+  startAttempt,
+  finalizeAttempt,
+  sanitizedPaper,
+  loadPaperQuestions,
+  aiAcceptedFromAttempt,
+} from './assessment.service';
 import { scoreQuestion } from '../scoring/scoring.service';
 import { ApiError } from '../../utils/ApiError';
 import { authUser } from '../../utils/authUser';
@@ -188,6 +194,9 @@ export const review: RequestHandler = async (req, res) => {
 
   const questions = await loadPaperQuestions(attempt);
   const answersById = new Map(attempt.answers.map((a) => [a.questionId.toString(), a.response]));
+  // The SAME verdicts the score was built from — never a fresh AI call, which
+  // could decide differently and make the review contradict the score.
+  const aiAccepted = aiAcceptedFromAttempt(attempt);
 
   const rows = attempt.paper
     .slice()
@@ -222,7 +231,12 @@ export const review: RequestHandler = async (req, res) => {
         // Graded with the same matcher the scorer uses (case/whitespace-
         // insensitive per blank), so the review verdict always agrees with
         // the recorded score. Multi-blank questions can earn partial credit.
-        const points = scoreQuestion(q, response);
+        const qid = entry.questionId.toString();
+        const points = scoreQuestion(q, response, aiAccepted.get(qid));
+        // Tells the learner why a non-matching spelling still earned the mark.
+        const aiNote = (attempt.aiVerdicts ?? []).find(
+          (v) => v.questionId.toString() === qid,
+        );
         return {
           order: entry.order,
           type: q.type,
@@ -230,6 +244,7 @@ export const review: RequestHandler = async (req, res) => {
           yourAnswer: given.join(' · ') || null,
           correctAnswer: accepted.join(' · '),
           result: points >= 0.999 ? 'correct' : points > 0 ? 'partial' : 'incorrect',
+          ...(aiNote ? { acceptedByMeaning: true } : {}),
         };
       }
       // Simulation: decision path vs recommended path (PRD §5.2).

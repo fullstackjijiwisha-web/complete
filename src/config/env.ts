@@ -50,6 +50,12 @@ const envSchema = z.object({
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_API_VERSION: z.string().default('v21.0'),
 
+  // Anthropic API key for meaning-based grading of fill-in-the-blank answers.
+  // Server-only: it is read here, used in src/services/aiGrader.service.ts, and
+  // never included in any API response or served to the browser. Leave it unset
+  // and grading falls back to exact string matching.
+  ANTHROPIC_API_KEY: z.string().optional(),
+
   SENTRY_DSN: z.string().optional(),
 
   SUPER_ADMIN_EMAIL: z.string().optional(),
