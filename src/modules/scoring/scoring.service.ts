@@ -38,7 +38,7 @@ export function normalizeAnswer(value: string): string {
  * left out - "do" is Hindi for two and also an ordinary English verb, so
  * mapping it would be a guess rather than a rule.
  */
-const NUMBER_WORDS: Record<string, string> = {
+export const NUMBER_WORDS: Record<string, string> = {
   // English
   zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6',
   seven: '7', eight: '8', nine: '9', ten: '10', eleven: '11', twelve: '12',
@@ -85,9 +85,16 @@ export function canonicalAnswer(value: string): string {
   // A leading article carries no meaning in a short answer.
   out = out.replace(/^(the|a|an)\s+/, '');
 
-  // Hyphens, dots, slashes and spaces are formatting, not content. Removing
-  // them collapses a whole family of spellings onto one key.
-  return out.replace(/[^a-z0-9\u0900-\u097f]/g, '');
+  // Hyphens, dots, slashes and spaces are formatting, not content: dropping
+  // them collapses a whole family of spellings onto one key. Each remaining
+  // word that names a number becomes that number, so "ninety days" and
+  // "90 days" agree - the rewrite is applied to the answer key too, so both
+  // sides always meet in the same form.
+  return out
+    .split(/[^a-z0-9\u0900-\u097f]+/)
+    .filter(Boolean)
+    .map((word) => NUMBER_WORDS[word] ?? word)
+    .join('');
 }
 
 /**
@@ -206,6 +213,12 @@ export function fibBlankMatches(acceptedAnswers: string[], given: string): boole
       if (numbers && numbers.length > 1 && numbers.every((n) => n === key)) return true;
       continue;
     }
+
+    // A key that carries a number is held to that number exactly, even though
+    // the key is not purely digits. Without this, "90 days" would accept
+    // "9 days" (one edit) and "190 days" (contains it) - both plainly wrong.
+    const keyDigits = key.replace(/\D/g, '');
+    if (keyDigits && answer.replace(/\D/g, '') !== keyDigits) continue;
 
     // A short key such as "IC" is matched as a whole word only when everything
     // else in the answer also comes from the answer key - "IC (Internal

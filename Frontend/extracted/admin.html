@@ -48,7 +48,6 @@
         <button class="admin-tab-btn" data-tab="tests">📊 Tests Taken</button>
         <button class="admin-tab-btn" data-tab="orgs">🏢 Organisations</button>
         <button class="admin-tab-btn" data-tab="feedback">💬 Feedbacks</button>
-        <button class="admin-tab-btn" data-tab="answerkeys">🔑 Answer Keys</button>
         <button class="admin-tab-btn" data-tab="email">✉ Email health</button>
       </div>
 
@@ -57,7 +56,13 @@
         <div id="tab-questions" class="card">
           <div class="card-header-flex">
             <h2 class="h-md" style="margin:0">Global Question Bank</h2>
-            <button class="btn btn-orange btn-sm" id="btn-add-question">+ Add New Question</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" id="btn-answer-key-doc"
+                title="Word document listing every answer accepted for every live fill-in-the-blank question">
+                ⬇ Answer key (Word)
+              </button>
+              <button class="btn btn-orange btn-sm" id="btn-add-question">+ Add New Question</button>
+            </div>
           </div>
           <div id="questions-container" style="display:flex; flex-direction:column; gap:12px;">
             <p class="small muted">Loading questions...</p>
@@ -165,25 +170,6 @@
           </p>
           <div id="tests-container">
             <p class="small muted">Loading…</p>
-          </div>
-        </div>
-
-        <!-- Tab: Answer keys -->
-        <div id="tab-answerkeys" class="card hidden">
-          <div class="card-header-flex">
-            <h2 class="h-md" style="margin:0">Answer Keys</h2>
-            <button class="btn btn-ghost btn-sm" id="btn-refresh-answerkeys">↻ Refresh</button>
-          </div>
-          <div id="answerkey-intro">
-            <p class="small muted" style="margin:0 0 14px">
-              Every fill-in-the-blank question in the bank, with every spelling that counts as
-              correct for each blank. This is the list of spellings written down — capitals,
-              spacing, hyphens, extra words, numbers in any notation, Indian spellings and
-              single-letter typos are matched against these automatically and are not listed.
-              <strong>Adding a spelling also re-marks the attempts it had already cost marks
-              in.</strong>
-            </p>
-            <div id="answerkey-container"><p class="small muted">Loading…</p></div>
           </div>
         </div>
 

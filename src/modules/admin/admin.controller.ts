@@ -18,13 +18,7 @@ import { checkEmailHealth } from '../../services/email.service';
 import { Audit, AuditSlot } from '../audits/audit.model';
 import { AuditLog, logAudit } from '../auditlog/auditLog.model';
 import { PublicStats } from '../stats/publicStats.model';
-import {
-  listUnmatched,
-  decideUnmatched,
-  listAnswerKeys,
-  addAcceptedAnswer,
-  removeAcceptedAnswer,
-} from '../scoring/reviewQueue.service';
+import { buildAnswerKeyReport, buildAnswerKeyDocx } from '../scoring/answerKeyDoc';
 import { Certificate } from '../certificates/certificate.model';
 import { AssessmentAttempt } from '../assessments/attempt.model';
 import { loadPaperQuestions } from '../assessments/assessment.service';
@@ -951,53 +945,21 @@ export const downloadOrgAuditDocument: RequestHandler = async (req, res) => {
   res.send(fileBuffer);
 };
 
-// ── Answer review queue ──────────────────────────────────────────────────
-// Fill-in-the-blank answers no rule could match. An administrator judges each
-// wording once; accepting one adds it to the answer key AND re-marks the
-// attempts it had cost marks in.
 
-export const listUnmatchedAnswers: RequestHandler = async (req, res) => {
-  const status = (req.query.status as string) ?? 'pending';
-  const rows = await listUnmatched(
-    status === 'all' || status === 'accepted' || status === 'rejected' ? status : 'pending',
-    Math.min(Number(req.query.limit) || 200, 500),
+// Word document of every answer accepted for every live fill-in-the-blank.
+// Built from the marking function itself, so it can never drift from it.
+export const downloadAnswerKeyDoc: RequestHandler = async (req, res) => {
+  const report = await buildAnswerKeyReport();
+  const file = buildAnswerKeyDocx(report, new Date());
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   );
-  res.json({ success: true, data: { rows, pendingShown: rows.length } });
-};
-
-export const decideUnmatchedAnswer: RequestHandler = async (req, res) => {
-  const result = await decideUnmatched(
-    req.params.id as string,
-    (req.body as { accept: boolean }).accept,
-    authUser(req).id,
-  );
-  res.json({ success: true, data: result });
-};
-
-// The answer key itself: what counts as correct for each fill-in-the-blank.
-export const listFibAnswerKeys: RequestHandler = async (req, res) => {
-  const rows = await listAnswerKeys(req.query.includeInactive === 'true');
-  res.json({ success: true, data: { rows } });
-};
-
-export const addFibAnswer: RequestHandler = async (req, res) => {
-  const body = req.body as { blankIndex: number; spelling: string };
-  const result = await addAcceptedAnswer(
-    req.params.id as string,
-    body.blankIndex,
-    body.spelling,
-    authUser(req).id,
-  );
-  res.json({ success: true, data: result });
-};
-
-export const removeFibAnswer: RequestHandler = async (req, res) => {
-  const body = req.body as { blankIndex: number; spelling: string };
-  const result = await removeAcceptedAnswer(
-    req.params.id as string,
-    body.blankIndex,
-    body.spelling,
-    authUser(req).id,
-  );
-  res.json({ success: true, data: result });
+  res.setHeader('Content-Disposition', `attachment; filename="POSH-answer-key-${stamp}.docx"`);
+  res.setHeader('Content-Length', String(file.length));
+  await logAudit('admin.answer_key_exported', 'Question', 'all', authUser(req).id, {
+    questions: report.length,
+  });
+  res.end(file);
 };

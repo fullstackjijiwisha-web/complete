@@ -56,10 +56,24 @@
       this.disabled = false;
     });
 
+    document.getElementById("btn-answer-key-doc").addEventListener("click", async function () {
+      const btn = this;
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Building…";
+      try {
+        // Every accepted spelling for every live blank — tens of thousands of
+        // them, so the file is built on demand rather than kept around.
+        await PC.downloadFile("/admin/fib-answer-key.docx", "POSH-answer-key.docx");
+      } catch (e) {
+        PC.alertModal("Could not build the answer key", PC.esc(e.message));
+      }
+      btn.textContent = label;
+      btn.disabled = false;
+    });
     document.getElementById("btn-create-sponsor").addEventListener("click", createSponsorLink);
     document.getElementById("btn-refresh-feedback").addEventListener("click", loadFeedback);
     document.getElementById("btn-refresh-email").addEventListener("click", loadEmailHealth);
-    document.getElementById("btn-refresh-answerkeys").addEventListener("click", loadAnswerKeys);
     document.getElementById("btn-refresh-tests").addEventListener("click", loadTestStats);
 
     // Wire up the org danger-zone wipe modal
@@ -99,143 +113,14 @@
 
   function switchTab(tab) {
     currentTab = tab;
-    ["questions", "tests", "orgs", "feedback", "answerkeys", "email"].forEach(t => {
+    ["questions", "tests", "orgs", "feedback", "email"].forEach(t => {
       document.getElementById("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "questions") loadQuestions();
     if (tab === "tests") loadTestStats();
     if (tab === "orgs") { loadOrgs(); loadSponsorLinks(); }
     if (tab === "feedback") loadFeedback();
-    if (tab === "answerkeys") loadAnswerKeys();
     if (tab === "email") loadEmailHealth();
-  }
-
-  /* ---------------- Answer Keys Tab ----------------
-     Every fill-in-the-blank question in the bank, with every spelling that
-     counts as correct for each of its blanks. Nothing is filtered out: the
-     whole answer key, in one place. */
-  let answerKeyRows = [];
-
-  async function loadAnswerKeys() {
-    const box = document.getElementById("answerkey-container");
-    box.innerHTML = '<p class="small muted">Loading…</p>';
-    let data;
-    try {
-      data = await PC.api("/admin/fib-answer-keys?includeInactive=true");
-    } catch (e) {
-      box.innerHTML = '<p class="small" style="color:#dc2626">' + PC.esc(e.message) + "</p>";
-      return;
-    }
-    answerKeyRows = data.rows;
-    if (!data.rows.length) {
-      box.innerHTML = '<p class="small muted">No fill-in-the-blank questions in the bank yet.</p>';
-      return;
-    }
-
-    const totalSpellings = data.rows.reduce(function (n, r) {
-      return n + r.blanks.reduce(function (m, b) { return m + b.accepted.length; }, 0);
-    }, 0);
-    const totalBlanks = data.rows.reduce(function (n, r) { return n + r.blanks.length; }, 0);
-
-    let html =
-      '<div class="fbadmin-stats">' +
-      '<div class="fbadmin-tile"><div class="num">' + data.rows.length + '</div><div class="lbl">Fill-in-the-blank questions</div></div>' +
-      '<div class="fbadmin-tile"><div class="num">' + totalSpellings + '</div><div class="lbl">Accepted spellings</div></div>' +
-      '<div class="fbadmin-tile"><div class="num">' + totalBlanks + '</div><div class="lbl">Blanks</div></div>' +
-      "</div>";
-
-    html += data.rows.map(function (r, qi) {
-      return '<div class="fbadmin-item" data-qid="' + PC.esc(r.questionId) + '" data-qi="' + qi + '">' +
-        '<div class="fbadmin-meta"><strong>Q' + (qi + 1) + "</strong>" +
-        (r.actReference ? "<span>" + PC.esc(r.actReference) + "</span>" : "") +
-        (r.isActive ? "" : '<span class="badge badge-neutral">inactive</span>') + "</div>" +
-        '<p class="small" style="margin:6px 0 10px">' + PC.esc(r.question) + "</p>" +
-        r.blanks.map(function (b) {
-          return '<div style="margin:0 0 10px;padding-left:10px;border-left:2px solid var(--border)">' +
-            '<p class="small muted" style="margin:0 0 6px">Blank ' + (b.blankIndex + 1) +
-              ' · ' + b.accepted.length + (b.accepted.length === 1 ? " key" : " keys") + "</p>" +
-            '<div class="pill-row" style="margin:0 0 8px">' +
-              b.accepted.map(function (a, ai) {
-                return '<span class="badge badge-' + (a.fromLearner ? "success" : "neutral") + '">' +
-                  PC.esc(a.text) +
-                  (a.fromLearner ? " · from a real answer" : "") +
-                  ' <button class="ak-del" data-bi="' + b.blankIndex + '" data-ai="' + ai +
-                  '" title="Remove this spelling" ' +
-                  'style="background:none;border:none;cursor:pointer;padding:0 2px">✕</button></span>';
-              }).join("") +
-            "</div>" +
-            '<div style="display:flex;gap:6px">' +
-              '<input class="input input-sm ak-add-input" data-blank="' + b.blankIndex +
-                '" placeholder="Add another accepted spelling" style="max-width:280px">' +
-              '<button class="btn btn-ghost btn-sm ak-add" data-blank="' + b.blankIndex + '">Add</button>' +
-            "</div>" +
-          "</div>";
-        }).join("") +
-        "</div>";
-    }).join("");
-
-    box.innerHTML = html;
-
-    box.querySelectorAll(".ak-add").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        const card = btn.closest("[data-qid]");
-        const input = card.querySelector('.ak-add-input[data-blank="' + btn.dataset.blank + '"]');
-        const spelling = input.value.trim();
-        if (!spelling) return;
-        submitAnswerKeyChange(card.dataset.qid, Number(btn.dataset.blank), spelling, "add", btn);
-      });
-    });
-
-    box.querySelectorAll(".ak-del").forEach(function (btn) {
-      btn.addEventListener("click", async function () {
-        const card = btn.closest("[data-qid]");
-        const ok = await PC.confirmModal(
-          "Remove this spelling?",
-          "It will no longer be accepted for this blank. If anyone was already marked correct " +
-            "by it, the removal is refused rather than contradicting a score already issued.",
-          "Remove",
-        );
-        if (!ok) return;
-        // The spelling is read back from the data, never from an attribute:
-        // an accepted answer may contain quotes.
-        const blank = answerKeyRows[Number(card.dataset.qi)].blanks
-          .find(function (b) { return b.blankIndex === Number(btn.dataset.bi); });
-        submitAnswerKeyChange(
-          card.dataset.qid,
-          Number(btn.dataset.bi),
-          blank.accepted[Number(btn.dataset.ai)].text,
-          "remove",
-          btn,
-        );
-      });
-    });
-  }
-
-  async function submitAnswerKeyChange(questionId, blankIndex, spelling, action, btn) {
-    btn.disabled = true;
-    try {
-      const res = await PC.api("/admin/fib-answer-keys/" + questionId + "/" + action, {
-        method: "POST",
-        body: { blankIndex: blankIndex, spelling: spelling },
-      });
-      if (action === "add") {
-        PC.alertModal(
-          res.added ? "Added to the answer key" : "Already accepted",
-          res.added
-            ? (res.attemptsRescored
-                ? res.attemptsRescored + " past attempt(s) re-marked" +
-                  (res.certificatesIssued
-                    ? ", and " + res.certificatesIssued + " certificate(s) issued as a result."
-                    : ".")
-                : "No past attempt needed re-marking.")
-            : "That wording was already matched — either it is in the list, or the rules " +
-              "already accept it.",
-        );
-      }
-    } catch (e) {
-      PC.alertModal("Could not change the answer key", PC.esc(e.message));
-    }
-    loadAnswerKeys();
   }
 
   /* ---------------- Tests Taken Tab ---------------- */

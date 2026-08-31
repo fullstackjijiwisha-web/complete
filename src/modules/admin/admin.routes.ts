@@ -189,21 +189,6 @@ adminRoutes.get('/orgs/:id/certificate', controller.downloadOrgCertificate);
 // Download an evidence document uploaded by an organisation (by org id + doc index)
 adminRoutes.get('/orgs/:id/documents/:docIndex', controller.downloadOrgAuditDocument);
 
-// Answer review queue — the manual half of grading: wordings the rules could
-// not match, judged once and then matched for free (and back-applied).
-adminRoutes.get('/unmatched-answers', controller.listUnmatchedAnswers);
-adminRoutes.post(
-  '/unmatched-answers/:id/decide',
-  validate(z.object({ accept: z.boolean() })),
-  controller.decideUnmatchedAnswer,
-);
 
-// The answer key for every fill-in-the-blank: what counts as correct, and the
-// ability to add a spelling by hand rather than waiting for one to be typed.
-const answerKeyBody = z.object({
-  blankIndex: z.number().int().min(0).max(19),
-  spelling: z.string().min(1).max(120),
-});
-adminRoutes.get('/fib-answer-keys', controller.listFibAnswerKeys);
-adminRoutes.post('/fib-answer-keys/:id/add', validate(answerKeyBody), controller.addFibAnswer);
-adminRoutes.post('/fib-answer-keys/:id/remove', validate(answerKeyBody), controller.removeFibAnswer);
+// The complete fill-in-the-blank answer key, as a Word document.
+adminRoutes.get('/fib-answer-key.docx', controller.downloadAnswerKeyDoc);
